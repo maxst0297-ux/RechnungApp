@@ -126,6 +126,8 @@ export async function oeffneSpeicher(name = 'rechnungapp') {
     dateiHolen: id => dateien.get(id) || null,
     dateienOffen: () => [...dateien.entries()].filter(([, d]) => !d.hochgeladen).map(([id, d]) => ({ id, ...d })),
     dateiHochgeladen(id) { const d = dateien.get(id); if (d) { d.hochgeladen = true; schreiben('dateien', id, d); } },
+    /** Noch nicht übertragene Datei wegwerfen (z. B. Foto aus einer verworfenen Notiz). */
+    dateiVerwerfen(id) { const d = dateien.get(id); if (d && !d.hochgeladen) { dateien.delete(id); schreiben('dateien', id, undefined); } },
 
     beiAenderung(f) { hoerer.add(f); return () => hoerer.delete(f); },
     async leeren() {

@@ -1,12 +1,16 @@
-// Tests der gemeinsamen Logik (Browser + Laptop-Server): Rechnen, Rechts-Check, Festschreiben, GiroCode, Vorschläge.
+// Tests der gemeinsamen Logik (Browser + Laptop-Server): Rechnen, Rechts-Check, Festschreiben, GiroCode, Vorschläge,
+// Diktat-Hilfen, Gliederung nach Kategorien, Baustellen und Notizen im Abgleich.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rundeCent, centAus, mengeAus, euro } from '../public/lib/geld.js';
 import { berechne } from '../public/lib/berechnung.js';
 import { pruefeRechnung } from '../public/lib/pruefung.js';
-import { festschreiben, rechnungsnummer, zaehlerName, zahlstatus } from '../public/lib/festschreiben.js';
+import { festschreiben, festeFassung, abschnitte, rechnungsnummer, zaehlerName, zahlstatus } from '../public/lib/festschreiben.js';
 import { epcText, ibanGueltig, qrMatrix } from '../public/lib/girocode.js';
-import { vorschlaegeAus } from '../public/lib/vorschlaege.js';
+import { vorschlaegeAus, vorschlaegeSumme, zahlwoerter } from '../public/lib/vorschlaege.js';
+import { sprachbefehle, anhaengen, wavBlob, wavVerbinden } from '../public/lib/diktat.js';
+import { blattHtml } from '../public/lib/blatt.js';
+import { aenderungenUebernehmen, freigabenAusfuehren, abschriftSetzen } from '../public/lib/abgleich-kern.js';
 import { zeitraumDe, plusTage } from '../public/lib/datum.js';
 
 const firma = { name: 'Muster Haustechnik GmbH', strasse: 'Werkstattweg 3', plz: '80331', ort: 'München', steuernummer: '143/123/45678',
@@ -48,7 +52,7 @@ test('Gemischte Steuersätze und § 13b', () => {
   assert.deepEqual(s.gruppen.map(g => [g.satz, g.nettoCent, g.steuerCent]), [[19, 11600, 2204], [7, 2000, 140]]);
   const rc = berechne(r, { reverseCharge: true });
   assert.equal(rc.steuerCent, 0);
-  assert.equal(rc.gruppen[0].kategorie, 'AE');
+  assert.equal(rc.gruppen[0].ustKategorie, 'AE');
 });
 
 test('Rechts-Check: Privatkunde bekommt § 35a, Aufbewahrung und Verzugshinweis', () => {
@@ -136,4 +140,139 @@ test('Datum: Zeiträume lesbar', () => {
   assert.equal(zeitraumDe('2026-09-22', '2026-09-26'), '22.09.–26.09.2026');
   assert.equal(zeitraumDe('2026-09-22', '2026-09-22'), '22.09.2026');
   assert.equal(plusTage('2026-12-25', 14), '2027-01-08');
+});
+
+test('Diktat: Zahlwörter, gesprochene Satzzeichen, Anhängen', () => {
+  assert.equal(zahlwoerter('zweieinhalb Stunden'), '2,5 Stunden');
+  assert.equal(zahlwoerter('eine halbe Stunde'), '0,5 Stunde');
+  assert.equal(zahlwoerter('dreiviertel Stunde'), '0,75 Stunde');
+  assert.equal(zahlwoerter('anderthalb Stunden, vierundzwanzig Meter'), '1,5 Stunden, 24 Meter');
+  assert.equal(sprachbefehle('Fuge erneuert komma vier Meter punkt neue Zeile Anfahrt'), 'Fuge erneuert, vier Meter.\nAnfahrt');
+  assert.equal(anhaengen('', 'zwei Eckventile'), 'Zwei Eckventile');
+  assert.equal(anhaengen('Fuge erneuert.', 'danach Anfahrt'), 'Fuge erneuert. Danach Anfahrt');
+  assert.equal(anhaengen('Fuge erneuert', ', vier Meter'), 'Fuge erneuert, vier Meter');
+  assert.equal(anhaengen('Fuge erneuert', 'vier Meter'), 'Fuge erneuert vier Meter');
+});
+
+test('Diktat: Aufnahmen aneinanderhängen (WAV 16 kHz)', async () => {
+  const a = wavBlob([new Int16Array([1, 2, 3])], 3, 16000), b = wavBlob([new Int16Array([4, -5])], 2, 16000);
+  const c = await wavVerbinden(a, b);
+  const puffer = await c.arrayBuffer(), kopf = new DataView(puffer);
+  assert.equal(String.fromCharCode(...new Uint8Array(puffer.slice(0, 4))), 'RIFF');
+  assert.equal(kopf.getUint32(24, true), 16000);
+  assert.equal(kopf.getUint32(40, true), 10, 'Datenlänge: 5 Werte × 2 Byte');
+  assert.deepEqual([...new Int16Array(puffer.slice(44))], [1, 2, 3, 4, -5]);
+});
+
+test('Vorschläge: Abkürzungen, Ortsangaben, keine Hausnummern/Daten/Beträge als Mengen, Baustelle erkennen', () => {
+  const katalog = [
+    { id: 'g', bezeichnung: 'Arbeitszeit Geselle', einheit: 'Std.', art: 'arbeit', favorit: true, suchwoerter: 'geselle monteur' },
+    { id: 'm', bezeichnung: 'Arbeitszeit Meister', einheit: 'Std.', art: 'arbeit' },
+    { id: 'h', bezeichnung: 'Arbeitszeit Helfer', einheit: 'Std.', art: 'arbeit', suchwoerter: 'helfer' },
+    { id: 'e', bezeichnung: 'Eckventil 1/2"', einheit: 'Stk.', art: 'material', suchwoerter: 'eckventil ventil' },
+    { id: 'w', bezeichnung: 'Einhebel-Waschtischarmatur', einheit: 'Stk.', art: 'material', suchwoerter: 'armatur waschtisch' },
+    { id: 'n', bezeichnung: 'Notdienstzuschlag', einheit: 'pauschal', art: 'arbeit', suchwoerter: 'notdienst wochenende nacht' },
+    { id: 'k', bezeichnung: 'Kleinmaterial', einheit: 'pauschal', art: 'material' }
+  ];
+  const mengen = t => Object.fromEntries(vorschlaegeAus(t, katalog).positionen.map(p => [p.leistungId, p.menge]));
+  assert.deepEqual(mengen('3. OG: 8 Std. Geselle, 7,5 Std. Helfer'), { g: 8, h: 7.5 }, '„Std." und „3." beenden keinen Satz');
+  assert.deepEqual(mengen('Eckventil unter dem Waschtisch getauscht'), { e: 1 }, 'Ortsangabe ist keine Leistung');
+  assert.deepEqual(mengen('Eine Stunde Arbeitszeit'), { g: 1 }, 'gemeinsames Stichwort → nur die häufig gebrauchte Leistung');
+  assert.deepEqual(mengen('Termin nächste Woche, Ahornweg 3'), {}, '„Woche" ist nicht „Wochenende", Hausnummer keine Menge');
+  assert.deepEqual(mengen('Kleinmaterial 20,47 €'), { k: 1 }, 'Geldbetrag ist keine Menge');
+  assert.deepEqual(mengen('am 3.10. um 14:30 Uhr: 2 Eckventile'), { e: 2 }, 'Datum und Uhrzeit sind keine Mengen');
+  assert.deepEqual(Object.fromEntries(vorschlaegeSumme(['8 Std. Geselle', '7,5 Std. Geselle, Kleinmaterial'], katalog).map(p => [p.leistungId, p.menge])), { g: 15.5, k: 1 });
+
+  const kunden = [{ id: 'k1', name: 'Familie Schneider' }, { id: 'k2', name: 'Bau-Kontor Süd GmbH' }, { id: 'k3', name: 'Hans Huber' }];
+  const baustellen = [{ id: 'b1', name: 'Bad OG Schneider', kundeId: 'k1', strasse: 'Lindenstraße 12' },
+    { id: 'b2', name: 'Wohnanlage Am Ring', kundeId: 'k2', strasse: 'Am Ring 5' },
+    { id: 'b3', name: 'Tiefgarage Am Ring', kundeId: 'k2', strasse: 'Am Ring 9', status: 'abgeschlossen' },
+    { id: 'b4', name: 'Heizungskeller', kundeId: 'k3', strasse: 'Gartenweg 5' }];
+  const b = t => vorschlaegeAus(t, katalog, kunden, baustellen);
+  assert.equal(b('Wohnanlage: 8 Std. Geselle').baustelle?.id, 'b2', 'über den Namen');
+  assert.equal(b('Wohnanlage: 8 Std. Geselle').kunde?.id, 'k2', 'Kunde kommt von der Baustelle');
+  assert.equal(b('Lindenstraße fertig').baustelle?.id, 'b1', 'über die Straße');
+  assert.equal(b('Bei Huber Therme gewartet').baustelle?.id, 'b4', 'Kunde mit genau einer laufenden Baustelle');
+  assert.equal(b('Tiefgarage nachgesehen').baustelle, null, 'abgeschlossene Baustellen zählen nicht');
+});
+
+test('Gliederung nach Kategorien: Reihenfolge, Abschnitte, Zwischensummen, Blatt', () => {
+  const kategorien = [{ id: 'kM', name: 'Material', position: 20 }, { id: 'kA', name: 'Arbeitszeit', position: 10 }];
+  const r = { ...entwurf, gliedern: true, positionen: [
+    { ...pos('p1', 'Eckventil', 2, 'Stk.', 1490, 'material'), kategorieId: 'kM' },
+    { ...pos('p2', 'Arbeitszeit Geselle', 2, 'Std.', 5800, 'arbeit'), kategorieId: 'kA' },
+    pos('p3', 'Entsorgung', 1, 'pauschal', 2500, 'sonstiges'),
+    { ...pos('p4', 'Arbeitszeit Helfer', 1, 'Std.', 3900, 'arbeit'), kategorieId: 'kA' }] };
+  const { fest } = festeFassung({ entwurf: r, firma, kunde: privat, nummer: '', datum: '2026-10-01', kategorien });
+  assert.deepEqual(fest.positionen.map(p => [p.pos, p.bezeichnung, p.gruppe]),
+    [[1, 'Arbeitszeit Geselle', 'Arbeitszeit'], [2, 'Arbeitszeit Helfer', 'Arbeitszeit'], [3, 'Eckventil', 'Material'], [4, 'Entsorgung', 'Weitere Leistungen']]);
+  const a = abschnitte(fest);
+  assert.deepEqual(a.map(x => [x.name, x.nettoCent]), [['Arbeitszeit', 15500], ['Material', 2980], ['Weitere Leistungen', 2500]]);
+  assert.equal(a.reduce((s, x) => s + x.nettoCent, 0), fest.summen.nettoCent);
+  const html = blattHtml(fest, { entwurf: true });
+  assert.match(html, /<tr class="b-gruppe"><td><\/td><td colspan="5">Arbeitszeit<\/td><\/tr>/);
+  assert.match(html, /Summe Arbeitszeit<\/td><td class="r">155,00 €/);
+  const ohne = festeFassung({ entwurf: { ...r, gliedern: false }, firma, kunde: privat, nummer: '', datum: '2026-10-01', kategorien }).fest;
+  assert.equal(abschnitte(ohne).length, 1, 'ohne Gliederung ein Abschnitt');
+  assert.equal(ohne.positionen[0].bezeichnung, 'Eckventil', 'Reihenfolge wie eingegeben');
+  assert.doesNotMatch(blattHtml(ohne), /b-gruppe|Summe Arbeitszeit/);
+});
+
+/** Speicher im Arbeitsspeicher – gleiche Schnittstelle wie die SQLite-Datenbank am Laptop. */
+function speicherImArbeitsspeicher() {
+  const daten = new Map(), zaehler = new Map(), k = o => JSON.parse(JSON.stringify(o));
+  return {
+    holen: (t, id) => { const d = daten.get(t + '/' + id); return d ? k(d) : null; },
+    alle: t => [...daten.values()].filter(d => d._typ === t).map(k),
+    seit: seq => [...daten.values()].filter(d => d._seq > seq).map(k),
+    zaehler: n => zaehler.get(n) || 0, zaehlerSetzen: (n, w) => { zaehler.set(n, w); }, hoechsteSeq: () => zaehler.get('seq') || 0,
+    schreiben(t, id, d) { const seq = (zaehler.get('seq') || 0) + 1; zaehler.set('seq', seq); const { _seq, ...o } = d; void _seq; daten.set(t + '/' + id, { ...k(o), _typ: t, id, _seq: seq }); return seq; },
+    protokoll() {}, transaktion: fn => fn()
+  };
+}
+const ohneMeta = d => Object.fromEntries(Object.entries(d).filter(([key]) => !key.startsWith('_')));
+
+test('Abgleich: Baustellen-Nummern, Notizen, Abschrift gehört dem Laptop, abgerechnet bleibt abgerechnet', async () => {
+  const s = speicherImArbeitsspeicher();
+  let uhr = Date.parse('2026-10-01T08:00:00Z');
+  const neu = (typ, id, daten, extra = {}) => ({ typ, id, daten, basis: 0, geaendert: new Date(uhr += 1000).toISOString(), ...extra });
+  aenderungenUebernehmen(s, 'handy', [neu('baustellen', 'b1', { name: 'Bad', nummer: 'GEFAELSCHT' }), neu('baustellen', 'b2', { name: 'Keller' })]);
+  assert.equal(s.holen('baustellen', 'b1').nummer, 'B-0001', 'Baustellennummer vergibt der Laptop');
+  assert.equal(s.holen('baustellen', 'b2').nummer, 'B-0002');
+
+  aenderungenUebernehmen(s, 'handy', [neu('notizen', 'n1', { text: '', baustelleId: 'b1', audio: 'a1', abschrift: 'gefälscht', abschriftStatus: 'fertig', status: 'offen' })]);
+  let n = s.holen('notizen', 'n1');
+  assert.equal(n.abschrift, null, 'Gerät kann keine Abschrift setzen');
+  assert.equal(n.abschriftStatus, 'wartet');
+
+  assert.equal(abschriftSetzen(s, 'a1', { text: 'Eckventil getauscht', status: 'fertig' }), 1);
+  n = s.holen('notizen', 'n1');
+  assert.deepEqual([n.abschrift, n.abschriftStatus], ['Eckventil getauscht', 'fertig']);
+
+  aenderungenUebernehmen(s, 'handy', [neu('notizen', 'n1', { ...ohneMeta(n), text: 'dazu Anfahrt', abschrift: null }, { basis: n._seq })]);
+  n = s.holen('notizen', 'n1');
+  assert.deepEqual([n.text, n.abschrift], ['dazu Anfahrt', 'Eckventil getauscht'], 'Text ändern lässt die Abschrift stehen');
+
+  aenderungenUebernehmen(s, 'handy', [neu('notizen', 'n1', { ...ohneMeta(n), audio: 'a2' }, { basis: n._seq })]);
+  n = s.holen('notizen', 'n1');
+  assert.deepEqual([n.abschrift, n.abschriftStatus], [null, 'wartet'], 'neue Aufnahme → alte Abschrift gilt nicht mehr');
+
+  // Gleichzeitig: Laptop tippt ab, während das Handy (auf altem Stand) den Text ändert → beides bleibt erhalten
+  const vorher = n;
+  abschriftSetzen(s, 'a2', { text: 'Zweite Aufnahme', status: 'fertig' });
+  const erg = aenderungenUebernehmen(s, 'handy', [neu('notizen', 'n1', { ...ohneMeta(vorher), text: 'Text neu' }, { basis: vorher._seq })]);
+  assert.equal(erg[0].ok, true, JSON.stringify(erg));
+  n = s.holen('notizen', 'n1');
+  assert.deepEqual([n.text, n.abschrift], ['Text neu', 'Zweite Aufnahme']);
+
+  // Rechnung aus der Notiz festschreiben → Notiz ist abgerechnet und lässt sich nicht wieder öffnen
+  aenderungenUebernehmen(s, 'laptop', [neu('einstellungen', 'firma', firma), neu('kunden', 'k1', privat)]);
+  aenderungenUebernehmen(s, 'handy', [neu('rechnungen', 'r1', { ...entwurf, notizen: ['n1'], freigabe: { angefordert: new Date(uhr).toISOString() } })]);
+  const f = await freigabenAusfuehren(s, { geraet: 'laptop', heute: '2026-10-01' });
+  assert.equal(f[0].ok, true, JSON.stringify(f));
+  n = s.holen('notizen', 'n1');
+  assert.deepEqual([n.status, n.rechnungId], ['abgerechnet', 'r1']);
+  aenderungenUebernehmen(s, 'handy', [neu('notizen', 'n1', { ...ohneMeta(n), status: 'offen', rechnungId: null }, { basis: n._seq })]);
+  assert.equal(s.holen('notizen', 'n1').status, 'abgerechnet');
+  assert.equal(aenderungenUebernehmen(s, 'handy', [neu('erfassungen', 'e1', { text: 'alt' })])[0].grund, 'ungueltig', 'alte Sammlung wird abgewiesen');
 });

@@ -4,6 +4,7 @@
 import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import { euro, mengeText } from '../public/lib/geld.js';
 import { anrede, anschriftZeilen, absenderZeile, infoZeilen, betreffZeile, fussSpalten } from '../public/lib/brief.js';
+import { abschnitte } from '../public/lib/festschreiben.js';
 import { epcText, qrMatrix, ibanText } from '../public/lib/girocode.js';
 
 const MM = 72 / 25.4;
@@ -143,7 +144,7 @@ export async function erstelleRechnungsPdf({ fest, logo = null, entwurf = false,
     pos = 28;
   };
   kopf();
-  for (const p of fest.positionen) {
+  const zeilePosition = p => {
     const bez = umbrechen(p.bezeichnung, normal, 9.5, bezBreite);
     const besch = p.beschreibung ? umbrechen(p.beschreibung, normal, 8, bezBreite) : [];
     const unten = (bez.length - 1) * 4.3 + (besch.length ? 4.3 - 0.6 + (besch.length - 1) * 3.6 : 0);   // letzte Grundlinie relativ zu pos
@@ -159,6 +160,20 @@ export async function erstelleRechnungsPdf({ fest, logo = null, entwurf = false,
     const trenner = pos + unten + 1.9;
     linie(LINKS, trenner, RECHTS, trenner, { dicke: 0.3 });
     pos = trenner + 4.6;
+  };
+  for (const a of abschnitte(fest)) {
+    if (a.name) {                                   // Gliederung nach Kategorie: Überschrift …
+      if (pos + 14 > INHALT_UNTEN) { folgeseite(); kopf(); }
+      text(a.name, SP.bez, pos + 0.6, { font: fett, groesse: 9.5, farbe: AKZENT });
+      pos += 6.2;
+    }
+    a.positionen.forEach(zeilePosition);
+    if (a.name) {                                   // … und Zwischensumme
+      if (pos + 4 > INHALT_UNTEN) { folgeseite(); kopf(); }
+      text(`Summe ${a.name}`, SP.preis, pos - 0.4, { font: fett, groesse: 8.5, rechts: true });
+      text(euro(a.nettoCent), SP.betrag, pos - 0.4, { font: fett, groesse: 9, rechts: true });
+      pos += 6.4;
+    }
   }
 
   // ── Summen ──

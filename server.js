@@ -10,7 +10,8 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, sep } from 'node:path';
 import { oeffneDatenbank } from './src/datenbank.js';
 import { erstelleRechnungsPdf } from './src/rechnung-pdf.js';
-import { aenderungenUebernehmen, freigabenAusfuehren, seit } from './public/lib/abgleich-kern.js';
+import { aenderungenUebernehmen, freigabenAusfuehren, seit, abschriftSetzen } from './public/lib/abgleich-kern.js';
+import { diktatEinrichtung, abtippen } from './src/diktat.js';
 import { festeFassung } from './public/lib/festschreiben.js';
 import { heuteIso } from './public/lib/datum.js';
 
@@ -23,11 +24,35 @@ const PORT = Number(process.env.PORT || 4200);
 const HOST = process.env.RA_HOST || '127.0.0.1';               // nur lokal; das Handy kommt über Tailscale (tailscale serve)
 const ORDNER = process.env.RA_ORDNER || join(os.homedir(), 'RechnungApp');
 const PIN = process.env.RA_PIN || '';
-const ORDN = { daten: join(ORDNER, 'Daten'), archiv: join(ORDNER, 'Archiv'), sicherungen: join(ORDNER, 'Sicherungen') };
+const ORDN = { daten: join(ORDNER, 'Daten'), archiv: join(ORDNER, 'Archiv'), sicherungen: join(ORDNER, 'Sicherungen'), modelle: join(ORDNER, 'Modelle') };
 for (const d of Object.values(ORDN)) fs.mkdirSync(d, { recursive: true });
 
 const speicher = oeffneDatenbank(join(ORDN.daten, 'rechnungapp.sqlite'));
 const log = (...a) => console.log(new Date().toISOString().slice(0, 19).replace('T', ' '), ...a);
+
+// Daten der ersten Version: „Erfassungen" heißen jetzt „Notizen" (mit Baustelle, Fotos und Sprachaufnahme) – einmalig umziehen
+function erfassungenUmziehen() {
+  const alt = speicher.alle('erfassungen').filter(e => !e._geloescht);
+  if (!alt.length) return;
+  const status = { neu: 'offen', zugeordnet: 'zugeordnet', erledigt: 'erledigt', abgerechnet: 'abgerechnet' };
+  const jetzt = new Date().toISOString();
+  speicher.transaktion(() => {
+    for (const e of alt) {
+      if (!speicher.holen('notizen', e.id)) {
+        speicher.schreiben('notizen', e.id, { id: e.id, text: e.text || '', baustelleId: null, kundeId: e.kundeId || null, datum: e.datum, fotos: e.dateien || [],
+          audio: null, audioSekunden: 0, status: status[e.status] || 'offen', rechnungId: e.rechnungId || null, angelegt: e.angelegt || jetzt,
+          geraetName: e.geraetName || '', _geaendert: e._geaendert || jetzt, _geraet: e._geraet || 'laptop' });
+      }
+      speicher.schreiben('erfassungen', e.id, { ...e, _geloescht: true, _geaendert: jetzt, _geraet: 'laptop' });
+    }
+    for (const r of speicher.alle('rechnungen')) {
+      if (!r._geloescht && r.status === 'entwurf' && r.erfassungen?.length && !r.notizen?.length) speicher.schreiben('rechnungen', r.id, { ...r, notizen: r.erfassungen });
+    }
+    speicher.protokoll({ aktion: 'umzug', typ: 'notizen', geraet: 'laptop', daten: { erfassungen: alt.length } });
+  });
+  log(`${alt.length} Erfassungen als Notizen übernommen`);
+}
+erfassungenUmziehen();
 
 // ── Sicherung: täglich eine vollständige Kopie der Datenbank, 30 Tage aufheben ──
 function sichern(anlass = 'taeglich') {
@@ -74,6 +99,43 @@ function melden() { const seq = speicher.hoechsteSeq(); for (const res of zuhoer
 setInterval(() => { for (const res of zuhoerer) res.write(': da\n\n'); }, 25000).unref();
 const geraete = new Map();
 
+// ── Sprachaufnahmen abtippen (whisper.cpp, offline auf dem Laptop) – eine nach der anderen ──
+let diktatKette = Promise.resolve();
+const fachwoerter = () => [...new Set([...speicher.alle('leistungen').filter(l => !l._geloescht && l.aktiv !== false).map(l => l.bezeichnung),
+  ...speicher.alle('baustellen').filter(b => !b._geloescht).map(b => b.name), ...speicher.alle('kunden').filter(k => !k._geloescht).map(k => k.name)])]
+  .join(', ').slice(0, 600);
+function abtippenEinreihen(id) { diktatKette = diktatKette.then(() => einmalAbtippen(id)).catch(e => log('Abtippen:', e.message)); }
+async function einmalAbtippen(id) {
+  const d = speicher.dateiHolen(id);
+  if (!d || d.abschrift_status === 'fertig') return;
+  const e = diktatEinrichtung(ORDN.modelle);
+  if (!e.verfuegbar) speicher.abschriftMerken(id, { status: 'keine-erkennung' });
+  else {
+    const start = Date.now();
+    try {
+      const text = await abtippen(join(ORDNER, d.pfad), { programm: e.programm, modell: e.modell, hinweise: fachwoerter() });
+      speicher.abschriftMerken(id, { text, status: 'fertig' });
+      log(`Sprachaufnahme abgetippt (${Math.round((Date.now() - start) / 100) / 10} s): ${text.slice(0, 60)}`);
+    } catch (err) { speicher.abschriftMerken(id, { status: 'fehler' }); log('Abtippen fehlgeschlagen:', err.message); }
+  }
+  abschriftenAnwenden();
+}
+/** Fertige Abschriften an die Notizen hängen – auch wenn die Notiz erst nach der Aufnahme beim Laptop ankommt. */
+function abschriftenAnwenden() {
+  let n = 0;
+  for (const notiz of speicher.alle('notizen')) {
+    if (notiz._geloescht || !notiz.audio) continue;
+    const d = speicher.dateiHolen(notiz.audio);
+    if (!d || !d.abschrift_status) continue;
+    if (notiz.abschriftStatus === d.abschrift_status && (notiz.abschrift || '') === (d.abschrift || '')) continue;
+    n += abschriftSetzen(speicher, notiz.audio, { text: d.abschrift || '', status: d.abschrift_status });
+  }
+  if (n) melden();
+  return n;
+}
+// Beim Start: Aufnahmen ohne Abschrift (z. B. weil die Spracherkennung erst jetzt eingerichtet ist) erneut einreihen
+for (const d of speicher.aufnahmen()) if (d.abschrift_status !== 'fertig') abtippenEinreihen(d.id);
+
 // ── App ──
 const app = express();
 app.disable('x-powered-by');
@@ -96,6 +158,7 @@ app.get('/api/status', (_req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.json({ ok: true, version: VERSION, seq: speicher.hoechsteSeq(), ordner: ORDNER, anzahl: speicher.anzahl(),
     protokoll: speicher.protokollPruefen(), geraete: [...geraete.values()],
+    diktat: (({ verfuegbar, modell }) => ({ verfuegbar, modell: modell ? modell.split(/[\\/]/).pop() : null, modellOrdner: ORDN.modelle }))(diktatEinrichtung(ORDN.modelle)),
     sicherungen: fs.readdirSync(ORDN.sicherungen).filter(f => f.endsWith('.sqlite')).sort().slice(-3) });
 });
 
@@ -107,6 +170,7 @@ app.post('/api/abgleich', async (req, res) => {
   try {
     const vorher = speicher.hoechsteSeq();
     const ergebnisse = aenderungenUebernehmen(speicher, geraet, b.aenderungen || []);
+    abschriftenAnwenden();
     const freigaben = await freigabenAbarbeiten(geraet);
     for (const f of freigaben) log(f.ok ? `Festgeschrieben: ${f.nummer}` : `Freigabe abgelehnt (${f.id}): ${f.fehler.join(' ')}`);
     const datensaetze = seit(speicher, b.seit);
@@ -125,8 +189,9 @@ app.get('/api/ereignisse', (req, res) => {
   req.on('close', () => zuhoerer.delete(res));
 });
 
-// Fotos und Dateien aus „Erfassen": landen im Archiv-Ordner auf dem Laptop
-const ENDUNG = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'application/pdf': 'pdf', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/mpeg': 'mp3' };
+// Fotos und Sprachaufnahmen aus Notizen: landen im Archiv-Ordner auf dem Laptop, Aufnahmen werden abgetippt
+const ENDUNG = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/heic': 'heic', 'application/pdf': 'pdf',
+  'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/mp4': 'm4a', 'audio/webm': 'webm', 'audio/mpeg': 'mp3' };
 app.put('/api/dateien/:id', express.raw({ type: () => true, limit: '30mb' }), (req, res) => {
   const id = req.params.id;
   if (!/^[A-Za-z0-9_-]{1,64}$/.test(id)) return res.status(400).json({ fehler: 'ungültige Kennung' });
@@ -135,13 +200,14 @@ app.put('/api/dateien/:id', express.raw({ type: () => true, limit: '30mb' }), (r
   const endung = ENDUNG[mime];
   if (!endung || !req.body?.length) return res.status(415).json({ fehler: 'Dateityp nicht unterstützt' });
   const [j, m] = heuteIso().split('-');
-  const ordner = join(ORDN.archiv, 'Erfassungen', j, m);
+  const ordner = join(ORDN.archiv, 'Notizen', j, m);
   fs.mkdirSync(ordner, { recursive: true });
   const ziel = join(ordner, `${id}.${endung}`);
   fs.writeFileSync(ziel + '.tmp', req.body); fs.renameSync(ziel + '.tmp', ziel);
   const sha256 = crypto.createHash('sha256').update(req.body).digest('hex');
   speicher.dateiMerken({ id, pfad: relative(ORDNER, ziel).split(sep).join('/'), mime, groesse: req.body.length, sha256 });
   speicher.protokoll({ aktion: 'datei', typ: 'dateien', id, geraet: String(req.headers['x-geraet'] || ''), daten: { mime, sha256 } });
+  if (endung === 'wav') abtippenEinreihen(id);
   res.json({ ok: true });
 });
 app.get('/api/dateien/:id', (req, res) => {
@@ -164,7 +230,7 @@ app.get('/api/rechnungen/:id/pdf', async (req, res) => {
   const firma = speicher.holen('einstellungen', 'firma') || {};
   const kunde = r.kundeId ? speicher.holen('kunden', r.kundeId) : null;
   const original = r.stornoVon ? speicher.holen('rechnungen', r.stornoVon) : null;
-  const { fest } = festeFassung({ entwurf: r, firma, kunde, nummer: '', datum: heuteIso(), original });
+  const { fest } = festeFassung({ entwurf: r, firma, kunde, nummer: '', datum: heuteIso(), original, kategorien: speicher.alle('kategorien') });
   const bytes = await erstelleRechnungsPdf({ fest, logo: firma.logo, entwurf: true });
   res.setHeader('Content-Disposition', `${art}; filename="Rechnung_Entwurf.pdf"`);
   res.setHeader('Cache-Control', 'no-store');

@@ -28,18 +28,24 @@ const nehmen = (o, felder) => Object.fromEntries(felder.filter(k => o && o[k] !=
  * Baut die Druckfassung („fest") einer Rechnung – auch für Entwürfe (Vorschau), dann ohne Gewähr.
  * @returns {{ pruefung: object, fest: object }}
  */
-export function festeFassung({ entwurf, firma = {}, kunde = null, nummer = '', datum, original = null }) {
+export function festeFassung({ entwurf, firma = {}, kunde = null, nummer = '', datum, original = null, kategorien = [] }) {
   const pruefung = pruefeRechnung({ firma, kunde, rechnung: entwurf, datum, original });
   const s = pruefung.summen;
+  // Optional nach Leistungs-Kategorien gliedern (Überschrift + Zwischensumme je Kategorie auf der Rechnung)
+  const gliedern = !!entwurf.gliedern;
+  const gruppeVon = p => { const k = kategorien.find(x => x.id === p.kategorieId && !x._geloescht); return k ? { name: k.name, rang: Number(k.position) || 0 } : { name: 'Weitere Leistungen', rang: 1e9 }; };
+  const positionen = gliedern ? s.positionen.map((p, i) => ({ p, i, g: gruppeVon(p) })).sort((a, b) => a.g.rang - b.g.rang || a.g.name.localeCompare(b.g.name, 'de') || a.i - b.i)
+    .map(x => ({ ...x.p, gruppe: x.g.name })) : s.positionen;
   const fest = {
     typ: entwurf.typ || 'rechnung', nummer, datum, faellig: pruefung.faellig, zahlungszielTage: pruefung.zahlungszielTage,
     leistungVon: entwurf.leistungVon || '', leistungBis: entwurf.leistungBis || entwurf.leistungVon || '',
     firma: nehmen(firma, FIRMA_FELDER), kunde: nehmen(kunde, KUNDE_FELDER),
     betreff: String(entwurf.betreff || '').trim(), einleitung: String(entwurf.einleitung ?? firma.einleitung ?? '').trim(),
     schluss: String(entwurf.schluss ?? firma.schluss ?? '').trim(),
-    positionen: s.positionen.map((p, i) => ({ pos: i + 1, bezeichnung: String(p.bezeichnung || '').trim(), beschreibung: String(p.beschreibung || '').trim(),
+    gliedern,
+    positionen: positionen.map((p, i) => ({ pos: i + 1, bezeichnung: String(p.bezeichnung || '').trim(), beschreibung: String(p.beschreibung || '').trim(),
       menge: Number(p.menge) || 0, einheit: p.einheit || '', einheitCode: einheitCode(p.einheit), preisCent: Number(p.preisCent) || 0, satz: p.satz,
-      kategorie: p.kategorie, art: p.art || 'sonstiges', nettoCent: p.nettoCent })),
+      ustKategorie: p.ustKategorie, art: p.art || 'sonstiges', nettoCent: p.nettoCent, ...(gliedern ? { gruppe: p.gruppe } : {}) })),
     summen: { gruppen: s.gruppen, nettoCent: s.nettoCent, steuerCent: s.steuerCent, bruttoCent: s.bruttoCent,
       arbeitNettoCent: s.arbeitNettoCent, arbeitSteuerCent: s.arbeitSteuerCent, arbeitBruttoCent: s.arbeitBruttoCent },
     hinweise: pruefung.hinweise.map(h => h.text), zahlung: pruefung.zahlung,
@@ -52,8 +58,8 @@ export function festeFassung({ entwurf, firma = {}, kunde = null, nummer = '', d
  * Prüft den Entwurf verbindlich und baut die unveränderbare Fassung.
  * @returns {{ ok: boolean, pruefung: object, rechnung?: object }}
  */
-export function festschreiben({ entwurf, firma, kunde, nummer, datum, original = null, zeitpunkt = new Date().toISOString() }) {
-  const { pruefung, fest } = festeFassung({ entwurf, firma, kunde, nummer, datum, original });
+export function festschreiben({ entwurf, firma, kunde, nummer, datum, original = null, kategorien = [], zeitpunkt = new Date().toISOString() }) {
+  const { pruefung, fest } = festeFassung({ entwurf, firma, kunde, nummer, datum, original, kategorien });
   if (!pruefung.ok) return { ok: false, pruefung };
   const rechnung = {
     ...entwurf, nummer, datum, faellig: fest.faellig, fest,
@@ -75,6 +81,18 @@ export function zahlstatus(r, heute) {
   if (r.status === 'bezahlt') return 'bezahlt';
   return r.faellig && r.faellig < heute ? 'ueberfaellig' : 'offen';
 }
+/** Positionen der Druckfassung in Abschnitte teilen (bei Gliederung je Kategorie, sonst ein Abschnitt). */
+export function abschnitte(fest) {
+  if (!fest.gliedern) return [{ name: '', positionen: fest.positionen, nettoCent: fest.summen?.nettoCent ?? fest.positionen.reduce((s, p) => s + p.nettoCent, 0) }];
+  const aus = [];
+  for (const p of fest.positionen) {
+    let a = aus[aus.length - 1];
+    if (!a || a.name !== p.gruppe) { a = { name: p.gruppe, positionen: [], nettoCent: 0 }; aus.push(a); }
+    a.positionen.push(p); a.nettoCent += p.nettoCent;
+  }
+  return aus;
+}
+
 export const offenerBetrag = r => {
   const brutto = r.fest?.summen?.bruttoCent || 0;
   const gezahlt = (r.zahlungen || []).reduce((s, z) => s + (Number(z.betragCent) || 0), 0);

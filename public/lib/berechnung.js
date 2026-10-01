@@ -41,13 +41,13 @@ export const aktivePositionen = r => (r.positionen || []).filter(p => p.aktiv !=
 export function berechne(r, { reverseCharge = false } = {}) {
   const positionen = aktivePositionen(r).map(p => {
     const satz = reverseCharge ? 0 : Number(p.steuersatz ?? 19);
-    const kategorie = reverseCharge ? 'AE' : satz > 0 ? 'S' : 'E';
-    return { ...p, satz, kategorie, nettoCent: positionNetto(p) };
+    const ustKategorie = reverseCharge ? 'AE' : satz > 0 ? 'S' : 'E';
+    return { ...p, satz, ustKategorie, nettoCent: positionNetto(p) };
   });
   const gruppenMap = new Map();
   for (const p of positionen) {
-    const key = p.kategorie + ':' + p.satz;
-    const g = gruppenMap.get(key) || { kategorie: p.kategorie, satz: p.satz, nettoCent: 0, steuerCent: 0, arbeitNettoCent: 0 };
+    const key = p.ustKategorie + ':' + p.satz;
+    const g = gruppenMap.get(key) || { ustKategorie: p.ustKategorie, satz: p.satz, nettoCent: 0, steuerCent: 0, arbeitNettoCent: 0 };
     g.nettoCent += p.nettoCent;
     if (ARBEITSKOSTEN.has(p.art)) g.arbeitNettoCent += p.nettoCent;
     gruppenMap.set(key, g);

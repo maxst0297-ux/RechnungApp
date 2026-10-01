@@ -1,9 +1,11 @@
 // Vorschau: der Laptop wird im Browser nachgebildet. Er nutzt dieselbe Abgleich-Logik wie der echte Laptop-Server
-// (public/lib/abgleich-kern.js) – nur ohne SQLite und ohne PDF. Daten bleiben in diesem Browser (IndexedDB).
-import { aenderungenUebernehmen, freigabenAusfuehren, seit } from '../public/lib/abgleich-kern.js';
-import { beispieldatenAnlegen } from './beispieldaten.js';
+// (public/lib/abgleich-kern.js) – nur ohne SQLite, ohne PDF und ohne whisper.cpp: Sprachaufnahmen „tippt" er mit dem
+// Satz ab, den die Diktat-Vorführung gesprochen hat. Daten bleiben in diesem Browser (IndexedDB).
+import { aenderungenUebernehmen, freigabenAusfuehren, seit, abschriftSetzen } from '../public/lib/abgleich-kern.js';
+import { beispieldatenAnlegen, diktatBeispiel, aufnahmeNachbilden } from './beispieldaten.js';
 
 const DB = 'rechnungapp-vorschau-laptop';
+const DATENSTAND = 2;   // bei geänderten Beispieldaten erhöhen → die Vorschau legt alles neu an
 const pause = ms => new Promise(ok => setTimeout(ok, ms));
 
 function kv(modus, wert) {
@@ -47,23 +49,37 @@ function speicherImArbeitsspeicher(zustand) {
 }
 
 export async function erstelleVorschauLaptop() {
-  const gespeichert = await kv('lesen');
+  const geladen = await kv('lesen');
+  const gespeichert = geladen?.stand === DATENSTAND ? geladen : null;
   const speicher = speicherImArbeitsspeicher(gespeichert?.speicher);
   const dateien = new Map(gespeichert?.dateien || []);
+  const abschriften = new Map(gespeichert?.abschriften || []);   // Aufnahme → Text (wie die Tabelle „dateien" am echten Laptop)
+  const vorgemerkt = new Map(gespeichert?.vorgemerkt || []);     // Aufnahme → Satz der Vorführung, solange sie noch nicht hochgeladen ist
   if (!gespeichert) await beispieldatenAnlegen(speicher, dateien);
   let timer = null;
-  const sichern = () => { clearTimeout(timer); timer = setTimeout(() => kv('schreiben', { speicher: speicher.export(), dateien: [...dateien.entries()] }), 200); };
+  const sichern = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => kv('schreiben', { stand: DATENSTAND, speicher: speicher.export(), dateien: [...dateien.entries()], abschriften: [...abschriften.entries()], vorgemerkt: [...vorgemerkt.entries()] }), 200);
+  };
   if (!gespeichert) sichern();
   const urls = new Map();
+  let melder = null;
+  /** Fertige Abschriften an Notizen hängen – auch an solche, die erst nach der Aufnahme ankommen (wie am echten Laptop). */
+  const abschriftenAnwenden = () => [...abschriften].reduce((n, [id, text]) => n + abschriftSetzen(speicher, id, { text, status: 'fertig' }), 0);
 
   const laptop = {
     verbunden: true,
+    neuAngelegt: !gespeichert,
+    diktatBeispiel,
+    aufnahmeNachbilden,
+    abschriftVormerken(id, text) { if (id) { vorgemerkt.set(id, text); sichern(); } },
     transport: {
       art: 'vorschau', istLaptop: false,
       async abgleich(body) {
         await pause(280);
         if (!laptop.verbunden) throw new Error('Laptop nicht erreichbar');
         const ergebnisse = aenderungenUebernehmen(speicher, body.geraet?.id || 'geraet', body.aenderungen || []);
+        abschriftenAnwenden();
         const freigaben = await freigabenAusfuehren(speicher, { geraet: body.geraet?.name || 'Gerät' });
         sichern();
         return { ergebnisse, freigaben, datensaetze: seit(speicher, body.seit), seq: speicher.hoechsteSeq() };
@@ -72,13 +88,23 @@ export async function erstelleVorschauLaptop() {
         await pause(150);
         if (!laptop.verbunden) throw new Error('Laptop nicht erreichbar');
         dateien.set(id, { blob, mime }); sichern();
+        // Sprachaufnahme: nach kurzer „Rechenzeit" abgetippt, dann meldet der Laptop die Änderung (wie per Server-Sent Events)
+        if (String(mime).startsWith('audio/')) {
+          setTimeout(() => {
+            abschriften.set(id, vorgemerkt.get(id) || diktatBeispiel(null));
+            vorgemerkt.delete(id);
+            if (abschriftenAnwenden()) melder?.(speicher.hoechsteSeq());
+            sichern();
+          }, 2600);
+        }
       },
       dateiUrl(id) {
         const d = dateien.get(id);
         if (!d) return '';
         if (!urls.has(id)) urls.set(id, URL.createObjectURL(d.blob));
         return urls.get(id);
-      }
+      },
+      ereignisse(aufruf) { melder = aufruf; }
     },
     async zuruecksetzen() {
       await new Promise(ok => { try { const r = indexedDB.deleteDatabase(DB); r.onsuccess = r.onerror = r.onblocked = () => ok(); } catch { ok(); } });

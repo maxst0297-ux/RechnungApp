@@ -1,6 +1,8 @@
 // Datenbank auf dem Laptop: eine SQLite-Datei (in Node eingebaut, keine Zusatzsoftware nötig).
-//   datensaetze  – alle Kunden, Leistungen, Rechnungen, Erfassungen, Einstellungen (JSON) mit fortlaufender Änderungsnummer (seq)
-//   zaehler      – Rechnungsnummern je Jahr, Kundennummern, seq
+//   datensaetze  – Kunden, Leistungen, Kategorien, Baustellen, Notizen, Rechnungen, Einstellungen (JSON) mit fortlaufender
+//                  Änderungsnummer (seq)
+//   zaehler      – Rechnungsnummern je Jahr, Kunden- und Baustellennummern, seq
+//   dateien      – Fotos und Sprachaufnahmen der Geräte (Datei im Archiv-Ordner) samt Abschrift
 //   protokoll    – jede Änderung, nur anhängen; jede Zeile enthält die Prüfsumme der vorigen (Kette) → nachträgliche
 //                  Manipulation fällt auf (GoBD: Nachvollziehbarkeit und Unveränderbarkeit)
 import { DatabaseSync } from 'node:sqlite';
@@ -26,6 +28,11 @@ export function oeffneDatenbank(datei) {
   `);
   db.prepare('INSERT OR IGNORE INTO meta (name, wert) VALUES (?, ?)').run('schema', String(SCHEMA_VERSION));
   db.prepare('INSERT OR IGNORE INTO meta (name, wert) VALUES (?, ?)').run('angelegt', new Date().toISOString());
+  // Spalten für die Abschrift von Sprachaufnahmen (ältere Datenbanken bekommen sie nachgerüstet)
+  const spalten = new Set(db.prepare('PRAGMA table_info(dateien)').all().map(z => z.name));
+  for (const [name, typ] of [['abschrift', 'TEXT'], ['abschrift_status', 'TEXT'], ['abschrift_zeit', 'TEXT']]) {
+    if (!spalten.has(name)) db.exec(`ALTER TABLE dateien ADD COLUMN ${name} ${typ}`);
+  }
 
   const q = {
     holen: db.prepare('SELECT daten, seq FROM datensaetze WHERE typ = ? AND id = ?'),
@@ -39,7 +46,9 @@ export function oeffneDatenbank(datei) {
     protokollAlle: db.prepare('SELECT * FROM protokoll ORDER BY nr'),
     anzahl: db.prepare('SELECT typ, COUNT(*) AS n FROM datensaetze GROUP BY typ'),
     dateiMerken: db.prepare('INSERT INTO dateien (id, pfad, mime, groesse, sha256, zeit) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (id) DO NOTHING'),
-    dateiHolen: db.prepare('SELECT * FROM dateien WHERE id = ?')
+    dateiHolen: db.prepare('SELECT * FROM dateien WHERE id = ?'),
+    abschriftSetzen: db.prepare('UPDATE dateien SET abschrift = ?, abschrift_status = ?, abschrift_zeit = ? WHERE id = ?'),
+    aufnahmen: db.prepare("SELECT * FROM dateien WHERE mime LIKE 'audio/%' ORDER BY zeit")
   };
   const lesen = zeile => (zeile ? { ...JSON.parse(zeile.daten), _seq: Number(zeile.seq) } : null);
   let tiefe = 0;
@@ -87,6 +96,8 @@ export function oeffneDatenbank(datei) {
     anzahl: () => Object.fromEntries(q.anzahl.all().map(z => [z.typ, Number(z.n)])),
     dateiMerken: ({ id, pfad, mime, groesse, sha256 }) => { q.dateiMerken.run(id, pfad, mime, groesse, sha256, new Date().toISOString()); },
     dateiHolen: id => q.dateiHolen.get(id) || null,
+    abschriftMerken: (id, { text = null, status }) => { q.abschriftSetzen.run(text, status, new Date().toISOString(), id); },
+    aufnahmen: () => q.aufnahmen.all(),
     /** Vollständige Kopie der Datenbank (auch während des Betriebs konsistent). */
     sichernNach(ziel) { db.exec(`VACUUM INTO '${String(ziel).replace(/'/g, "''")}'`); },
     schliessen: () => db.close()

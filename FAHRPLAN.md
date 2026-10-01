@@ -45,6 +45,25 @@
 | E-Rechnung | Etappe 7 | **vorgezogen**: Behörden verlangen schon heute XRechnung; Firmenkunden ab 1.1.2028 (bzw. 1.1.2027 bei mehr als 800.000 € Vorjahresumsatz) |
 | Handwerk | allgemein | Ausweis der Arbeitskosten (§ 35a EStG), § 13b (Bauleistung an Bauunternehmer) und Grundstückshinweise sind eingebaut; Abschlags- und Schlussrechnungen rücken vor |
 
+**Update: Kategorien, Baustellen, Notizen mit Diktat (zweite Version)**
+- **Leistungs-Kategorien:** eigene Kategorien mit Farbe und Reihenfolge (Vorschlag zum Start: Arbeitszeit, Material,
+  Anfahrt & Fahrtkosten, Wartung & Kundendienst, Sonstiges). Katalog danach gruppiert und filterbar. Auf Wunsch
+  gliedert sich die Rechnung nach Kategorien – Überschrift und Zwischensumme je Kategorie, im Editor, im PDF und im
+  Archiv gleich. Einstellbar je Rechnung, Standard in den Einstellungen.
+- **Baustellen:** Name, Kunde, Adresse, Stand (laufend/abgeschlossen); Nummer `B-0001` vom Laptop. Je Baustelle ein
+  Bautagebuch und „Rechnung erstellen" aus allen offenen Notizen.
+- **Notiz** statt „Erfassen": goldener Knopf in der Mitte. Baustelle mit einem Tipp (zuletzt benutzte vorgewählt,
+  neue direkt anlegbar, Erkennung aus dem Text), Diktat, Fotos, Datum. Notizen sind offen → in Rechnung →
+  abgerechnet (oder ohne Rechnung erledigt). Ungespeicherte Notizen übersteht das Schließen der App.
+- **Diktat:** live über die Spracherkennung des Browsers oder als Aufnahme, die der Laptop offline mit whisper.cpp
+  abtippt (für die iPhone-App vom Home-Bildschirm und ohne Netz). Mehrere Aufnahmen hängen sich an dieselbe Notiz.
+  Die Erkennung versteht jetzt auch Zahlwörter („zweieinhalb Stunden"), Abkürzungen („8 Std. Helfer"), Ortsangaben
+  („Eckventil unter dem Waschtisch") und hält Hausnummern, Daten und Beträge nicht für Mengen.
+- **Geprüft:** 17 automatische Tests, darunter der Server mit einem Ersatz für whisper.cpp. Mit echtem Server, zwei
+  Browsern und Test-Mikrofon durchgespielt: Notiz mit Foto vom Handy ist nach unter 1 Sekunde am Laptop →
+  Rechnung aus der Baustelle → festgeschrieben → Handy zeigt „abgerechnet"; Aufnahme am Handy → am Laptop abgetippt →
+  Text und erkannte Positionen am Handy; Notiz ohne Verbindung kommt später an.
+
 **Was schon gebaut ist (erste Version)**
 - **Laptop-Server** (`server.js`): SQLite-Datenbank, Abgleich mit beliebig vielen Geräten, Live-Meldung an offene
   Geräte, Festschreiben mit Nummernvergabe, PDF nach DIN 5008 mit GiroCode, schreibgeschütztes Archiv mit
@@ -71,7 +90,7 @@
 | 5 | E-Rechnung: XRechnung (Behörden) und ZUGFeRD (Firmen), automatische Prüfung vor dem Versand | vorgezogen |
 | 6 | Mailversand direkt aus der App, Zahlungserinnerung und Mahnungen | danach |
 | 7 | Abschlags- und Schlussrechnungen, Angebote | für Handwerk vorgezogen |
-| 8 | Erfassen ausbauen: Dokument-Scanner aus MyDesk, Texterkennung für Belege, Kurzbefehl, Whisper | danach |
+| 8 | Erfassen ausbauen: Diktat mit Whisper ✓ (zweite Version), Dokument-Scanner aus MyDesk, Texterkennung für Belege, Kurzbefehl | Diktat fertig, Rest danach |
 | 9 | Wiederkehrende Rechnungen, Auswertungen, Steuer-Export, Verfahrensdokumentation | danach |
 
 **Noch offen – bitte beantworten**
@@ -81,6 +100,9 @@
 4. Ist der Laptop ein **Mac**, und ist er tagsüber meist an? Davon hängt ab, wie schnell sich das Handy abgleicht.
 5. Über welches **Mail-Postfach** (Anbieter) sollen die Rechnungen später rausgehen?
 6. Gibt es einen **Steuerberater**, und arbeitet er mit DATEV?
+7. **Kategorien:** Passen die vorgeschlagenen, oder ordnest du lieber nach Gewerk/Bauabschnitt (z. B. Demontage,
+   Rohinstallation, Fliesen, Endmontage)? Mit deiner Leistungsliste lege ich sie gleich passend an.
+8. Sollen Rechnungen **standardmäßig nach Kategorien gegliedert** sein – für alle oder nur für Firmen und Behörden?
 
 ---
 
@@ -470,8 +492,8 @@ der § 19-Hinweis da.
 |---|---|---|---|---|
 | iPhone-Diktat (Mikrofon-Taste der Tastatur) | in jedem Textfeld der App | keiner | auf dem iPhone | Stufe 1 – ab Tag 1 |
 | Kurzbefehl „Notiz an RechnungApp" | Siri oder Action-Button → diktieren → landet im Eingang, ohne die App zu öffnen | klein | wie oben | Stufe 1 |
-| Sprachaufnahme + Whisper auf dem Laptop | Aufnahme in der App, der Laptop schreibt mit; die Aufnahme bleibt als Beleg | mittel | bleibt komplett zu Hause | Stufe 2 |
-| Spracherkennung im Browser (Web Speech API) | – | – | – | funktioniert in der Home-Bildschirm-App auf dem iPhone nicht (nur im Safari-Tab) – daher nicht eingeplant |
+| Sprachaufnahme + Whisper auf dem Laptop | Aufnahme in der App, der Laptop schreibt mit; die Aufnahme bleibt als Beleg | mittel | bleibt komplett zu Hause | **gebaut** („Aufnahme → Laptop") |
+| Spracherkennung im Browser (Web Speech API) | Text erscheint beim Sprechen | – | läuft beim Browser-Anbieter (Apple/Google) | **gebaut** („Live mitschreiben") – in der Home-Bildschirm-App auf dem iPhone nicht verfügbar, dort nimmt die App automatisch auf |
 | Cloud-Dienst | Aufnahme geht an einen Anbieter | klein | Vertrag zur Auftragsverarbeitung nötig, Kosten | nur, wenn du es willst |
 
 ### Vom Text zur Rechnungsposition
@@ -491,8 +513,10 @@ Kunde        id, kundennr, typ (privat/firma/behoerde), name, anschrift, mail, u
              versand, format, zustimmungMail, zahlungsziel, preise{}, standardPositionen[]
 Artikel      id, bezeichnung, beschreibung, einheit (UN/ECE-Code), preisNettoCent, steuersatz,
              art (arbeit/material/fahrt), favorit, suchwoerter[]
-Erfassung    id, typ (foto/scan/diktat/notiz/zeit), datum, kundeId, text, dateien[],
-             vorschlaege[], status (neu/zugeordnet/abgerechnet/verworfen)
+Kategorie    id, name, farbe, position                              (Artikel.kategorieId → Kategorie)
+Baustelle    id, nummer (B-0001), name, kundeId, anschrift, status (aktiv/abgeschlossen), beginn, ende
+Notiz        id, datum, baustelleId, kundeId, text, fotos[], audio, abschrift (nur der Laptop schreibt sie),
+             status (offen/zugeordnet/abgerechnet/erledigt), rechnungId
 Rechnung     id, nummer, typ (rechnung/storno/korrektur), status, datum, leistungVon, leistungBis,
              kunde (Kopie), unternehmen (Kopie), positionen[], summen, hinweise[],
              dateien {pdf, xml, sha256}, versand[], zahlungen[], mahnungen[], bezugId
@@ -567,8 +591,8 @@ Rechnung ist raus.
 **Fertig, wenn:** Eine Rechnung geht per Mail raus, die Zahlung ist abgehakt und Überfälliges meldet sich von selbst.
 
 ### Etappe 5 – Erfassen am Handy (Foto, Text, Sprache)
-- „Erfassen"-Knopf: Foto/Scan (MyDesk-Scanner), Diktat, Notiz, optional Zeit
-- Eingang am Laptop mit Live-Aktualisierung; einem Kunden zuordnen → in die Rechnung übernehmen
+- „Notiz"-Knopf: Diktat, Text, Fotos – direkt einer Baustelle zugeordnet ✓; noch offen: Scan (MyDesk-Scanner), Zeit
+- Bautagebuch je Baustelle mit Live-Aktualisierung; Rechnung aus allen offenen Notizen ✓
 - Texterkennung für Material-Belege (Betrag, Lieferant, Datum) → Position „Material laut Beleg" (optional mit
   Aufschlag)
 - Sprache Stufe 1: iPhone-Diktat und Kurzbefehl „Notiz an RechnungApp"; Stufe 2: Whisper auf dem Laptop
@@ -678,7 +702,7 @@ Kunden im EU-Ausland.
 | Datenverlust – der Laptop kann kaputtgehen oder gestohlen werden | tägliche Sicherung, Time Machine, Kopie außer Haus, Festplattenverschlüsselung (FileVault) |
 | Gleichzeitige Änderung desselben Eintrags auf zwei Geräten | die neuere Änderung gewinnt, die ältere bleibt im Protokoll; Nummern vergibt nur der Laptop |
 | Laptop aus oder zugeklappt | das Handy arbeitet weiter und gleicht später ab; für schnellen Abgleich den Laptop tagsüber anlassen |
-| iPhone-Grenzen: Browser-Spracherkennung geht in der Home-Bildschirm-App nicht; Mitteilungen nur, wenn die App auf dem Home-Bildschirm liegt | Diktat, Kurzbefehl und Whisper statt Browser-Spracherkennung |
+| iPhone-Grenzen: Browser-Spracherkennung geht in der Home-Bildschirm-App nicht; Mitteilungen nur, wenn die App auf dem Home-Bildschirm liegt | dort nimmt die App auf und der Laptop tippt mit Whisper ab; Tastatur-Diktat geht immer |
 | Texterkennung, Sprache und KI können sich irren | alles Vorgeschlagene bleibt rot, bis du es bestätigst; nichts geht ohne Freigabe raus (außer du schaltest die Vollautomatik für Abos ein) |
 | E-Rechnungsformate ändern sich (XRechnung 4.0 ab 2027) | Bibliothek und Prüfregeln aktuell halten, Testrechnungen bei jedem Update |
 | Rechnungs-Mails landen im Spam | Versand über dein echtes Postfach statt direkt vom Laptop, möglichst eigene Domain |

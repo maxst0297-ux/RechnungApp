@@ -1,6 +1,7 @@
 // Ende-zu-Ende-Test des Laptop-Servers mit zwei simulierten Geräten (Handy + Laptop):
 // Abgleich in beide Richtungen, gleichzeitige Änderungen, Freigabe mit Nummernvergabe, PDF im Archiv,
-// Schutz festgeschriebener Rechnungen, Storno, Dateiablage, Protokoll-Kette.
+// Schutz festgeschriebener Rechnungen, Storno, Dateiablage, Protokoll-Kette – und Baustellen, Notizen mit
+// Sprachaufnahme (abgetippt von einem Ersatz für whisper.cpp), Gliederung nach Kategorien, Umzug alter Erfassungen.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -8,6 +9,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import crypto from 'node:crypto';
 import { join } from 'node:path';
+import { oeffneDatenbank } from '../src/datenbank.js';
+import { wavBlob } from '../public/lib/diktat.js';
 
 const ORDNER = fs.mkdtempSync(join(os.tmpdir(), 'rechnungapp-test-'));
 const PORT = 4300 + Math.floor(Math.random() * 500);
@@ -15,7 +18,16 @@ const URL = `http://127.0.0.1:${PORT}`;
 let server;
 
 before(async () => {
-  server = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(PORT), RA_ORDNER: ORDNER }, stdio: 'pipe' });
+  // Datenbank der ersten Version mit einer alten „Erfassung" – muss beim Start zur Notiz werden
+  fs.mkdirSync(join(ORDNER, 'Daten'), { recursive: true });
+  const alt = oeffneDatenbank(join(ORDNER, 'Daten', 'rechnungapp.sqlite'));
+  alt.schreiben('erfassungen', 'e-alt', { text: 'Alte Erfassung: 2 Std. Geselle', kundeId: null, datum: '2026-09-30', dateien: [], status: 'neu', angelegt: '2026-09-30T08:00:00.000Z', _geaendert: '2026-09-30T08:00:00.000Z' });
+  alt.schliessen();
+  // Ersatz für whisper.cpp: gibt immer denselben Satz aus (mit Zeitstempeln wie das echte Programm)
+  const whisper = join(ORDNER, 'whisper-ersatz.sh');
+  fs.writeFileSync(whisper, '#!/bin/sh\necho "[00:00:00.000 --> 00:00:02.000]   Eckventil getauscht, eine halbe Stunde."\n', { mode: 0o755 });
+  fs.writeFileSync(join(ORDNER, 'ggml-test.bin'), 'kein echtes Modell');
+  server = spawn(process.execPath, ['server.js'], { env: { ...process.env, PORT: String(PORT), RA_ORDNER: ORDNER, RA_WHISPER: whisper, RA_WHISPER_MODELL: join(ORDNER, 'ggml-test.bin') }, stdio: 'pipe' });
   server.stderr.on('data', d => process.stderr.write(d));
   for (let i = 0; i < 50; i++) {
     try { if ((await fetch(URL + '/api/status')).ok) return; } catch {}
@@ -119,4 +131,53 @@ test('Abgleich, Konflikt, Festschreiben, Schutz, Storno, Dateien', async () => {
   assert.equal(status.protokoll.ok, true);
   assert.ok(status.protokoll.eintraege > 5);
   assert.ok(status.sicherungen.length >= 1);
+});
+
+test('Baustellen, Notiz mit Sprachaufnahme, Abschrift vom Laptop, Gliederung im PDF, Umzug alter Erfassungen', async () => {
+  const status = await (await fetch(URL + '/api/status')).json();
+  assert.equal(status.diktat.verfuegbar, true, JSON.stringify(status.diktat));
+
+  // Alte Erfassung ist jetzt eine offene Notiz, die Erfassung selbst gelöscht
+  const alle = await abgleich('handy2', 0);
+  assert.equal(finde(alle, 'notizen', 'e-alt')?.status, 'offen');
+  assert.equal(finde(alle, 'notizen', 'e-alt')?.text, 'Alte Erfassung: 2 Std. Geselle');
+  assert.equal(finde(alle, 'erfassungen', 'e-alt')?._geloescht, true);
+
+  // Handy: Aufnahme hochladen (wird sofort abgetippt), dann Kategorien, Kunde, Baustelle und die Notiz dazu
+  const wav = Buffer.from(await wavBlob([new Int16Array(16000)], 16000, 16000).arrayBuffer());
+  assert.equal((await fetch(URL + '/api/dateien/a1', { method: 'PUT', headers: { 'Content-Type': 'audio/wav' }, body: wav })).status, 200);
+  const h1 = await abgleich('handy2', alle.seq, [
+    { typ: 'einstellungen', id: 'firma', daten: firma, basis: 0, geaendert: jetzt(10000) },
+    { typ: 'kategorien', id: 'kA', daten: { name: 'Arbeitszeit', farbe: 'gold', position: 10 }, basis: 0, geaendert: jetzt() },
+    { typ: 'kategorien', id: 'kM', daten: { name: 'Material', farbe: 'gruen', position: 20 }, basis: 0, geaendert: jetzt() },
+    { typ: 'kunden', id: 'k9', daten: { ...kunde, name: 'Familie Schneider', anrede: '' }, basis: 0, geaendert: jetzt() },
+    { typ: 'baustellen', id: 'b1', daten: { name: 'Bad OG Schneider', kundeId: 'k9', strasse: 'Lindenstraße 12', plz: '85540', ort: 'Haar', status: 'aktiv', nummer: 'X' }, basis: 0, geaendert: jetzt() },
+    { typ: 'notizen', id: 'n1', daten: { text: '', baustelleId: 'b1', kundeId: 'k9', datum: '2026-09-30', fotos: [], audio: 'a1', audioSekunden: 1, status: 'offen', abschrift: 'vom Handy' }, basis: 0, geaendert: jetzt() }
+  ]);
+  assert.ok(h1.ergebnisse.every(e => e.ok), JSON.stringify(h1.ergebnisse));
+  assert.equal(finde(h1, 'baustellen', 'b1').nummer, 'B-0001', 'Baustellennummer vergibt der Laptop');
+  let n = finde(h1, 'notizen', 'n1');
+  for (let i = 0; i < 50 && n?.abschriftStatus !== 'fertig'; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    n = finde(await abgleich('handy2', 0), 'notizen', 'n1');
+  }
+  assert.equal(n.abschriftStatus, 'fertig');
+  assert.equal(n.abschrift, 'Eckventil getauscht, eine halbe Stunde.', 'Abschrift vom Laptop, nicht vom Handy');
+  const datei = fs.readdirSync(join(ORDNER, 'Archiv', 'Notizen'), { recursive: true }).filter(f => String(f).endsWith('a1.wav'));
+  assert.equal(datei.length, 1, 'Aufnahme liegt im Archiv-Ordner');
+
+  // Rechnung aus der Notiz, nach Kategorien gegliedert → festschreiben → Notiz abgerechnet, PDF mit Zwischensummen
+  const l = await abgleich('laptop2', 0, [{ typ: 'rechnungen', id: 'r9', basis: 0, geaendert: jetzt(), daten: {
+    typ: 'rechnung', kundeId: 'k9', baustelleId: 'b1', leistungVon: '2026-09-30', amGrundstueck: true, gliedern: true, notizen: ['n1'], betreff: 'Bauvorhaben: Bad OG Schneider',
+    positionen: [{ id: 'q1', bezeichnung: 'Eckventil 1/2"', menge: 1, einheit: 'Stk.', preisCent: 1490, steuersatz: 19, art: 'material', kategorieId: 'kM' },
+      { id: 'q2', bezeichnung: 'Arbeitszeit Geselle', menge: 0.5, einheit: 'Std.', preisCent: 5800, steuersatz: 19, art: 'arbeit', kategorieId: 'kA' }],
+    freigabe: { angefordert: jetzt(), geraet: 'laptop' } } }]);
+  assert.equal(l.freigaben[0].ok, true, JSON.stringify(l.freigaben));
+  const r = finde(l, 'rechnungen', 'r9');
+  assert.deepEqual(r.fest.positionen.map(p => [p.bezeichnung, p.gruppe]), [['Arbeitszeit Geselle', 'Arbeitszeit'], ['Eckventil 1/2"', 'Material']]);
+  assert.equal(finde(l, 'notizen', 'n1').status, 'abgerechnet');
+  const text = execFileSync('pdftotext', ['-layout', join(ORDNER, r.pdf.datei), '-']).toString().replace(/\s+/g, ' ');
+  for (const t of ['Bauvorhaben: Bad OG Schneider', 'Arbeitszeit', 'Summe Arbeitszeit 29,00 €', 'Summe Material 14,90 €', '52,24 €']) assert.ok(text.includes(t), 'PDF enthält ' + t + ' – Text: ' + text.slice(0, 1600));
+  const st2 = await (await fetch(URL + '/api/status')).json();
+  assert.equal(st2.protokoll.ok, true);
 });

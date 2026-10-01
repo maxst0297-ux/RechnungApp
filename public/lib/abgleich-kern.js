@@ -3,7 +3,8 @@
 // Prinzip: Jedes Gerät hat eine eigene Kopie der Daten und arbeitet auch ohne Verbindung weiter. Sobald der Laptop
 // erreichbar ist, schickt das Gerät seine Änderungen und holt alles, was sich seit dem letzten Abgleich geändert hat.
 // Der Laptop ist die Hauptablage: Er zählt jede Änderung fortlaufend (seq), entscheidet bei gleichzeitigen Änderungen,
-// vergibt Rechnungs- und Kundennummern und schreibt Rechnungen fest. Festgeschriebene Rechnungen kann kein Gerät
+// vergibt Rechnungs-, Kunden- und Baustellennummern und schreibt Rechnungen fest. Abschriften von Sprachaufnahmen
+// schreibt nur der Laptop. Festgeschriebene Rechnungen kann kein Gerät
 // mehr verändern – nur Zahlungen und Versand dürfen noch nachgetragen werden.
 //
 // Der Speicher wird übergeben (SQLite auf dem Laptop, Arbeitsspeicher in der Vorschau) und muss bieten:
@@ -13,8 +14,9 @@
 import { festschreiben, zaehlerName, rechnungsnummer, NACH_FESTSCHREIBEN_AENDERBAR, STATUS_NACH_FESTSCHREIBEN } from './festschreiben.js';
 import { heuteIso } from './datum.js';
 
-export const TYPEN = ['einstellungen', 'kunden', 'leistungen', 'rechnungen', 'erfassungen'];
+export const TYPEN = ['einstellungen', 'kunden', 'leistungen', 'kategorien', 'baustellen', 'notizen', 'rechnungen'];
 const NUR_SERVER = ['nummer', 'fest', 'festgeschriebenAm', 'pdf', 'datum', 'faellig', 'freigabeFehler', 'storniertDurch'];
+export const ABSCHRIFT_FELDER = ['abschrift', 'abschriftStatus', 'abschriftZeit'];
 const MAX_GROESSE = { einstellungen: 3_000_000, default: 400_000 };
 const gleich = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 
@@ -72,6 +74,16 @@ function eineAenderung(speicher, geraet, a, jetzt) {
     if (daten.typ !== 'storno') daten.typ = 'rechnung';
   }
   if (typ === 'kunden' && !a.geloescht) daten.nummer = alt?.nummer || ('K-' + String(naechster(speicher, 'kunde')).padStart(4, '0'));
+  if (typ === 'baustellen' && !a.geloescht) daten.nummer = alt?.nummer || ('B-' + String(naechster(speicher, 'baustelle')).padStart(4, '0'));
+  if (typ === 'notizen') {
+    // Die Abschrift einer Sprachaufnahme gehört dem Laptop – ein Gerät kann sie nicht überschreiben.
+    // Neue Aufnahme an der Notiz → alte Abschrift gilt nicht mehr (die neue folgt, sobald der Laptop sie abgetippt hat).
+    const gleicheAufnahme = !!alt && alt.audio === daten.audio;
+    for (const k of ABSCHRIFT_FELDER) daten[k] = gleicheAufnahme ? alt[k] ?? null : null;
+    if (daten.audio && !daten.abschriftStatus) daten.abschriftStatus = 'wartet';
+    if (!daten.audio && daten.abschriftStatus === 'wartet') daten.abschriftStatus = null;
+    if (alt?.status === 'abgerechnet') { daten.status = 'abgerechnet'; daten.rechnungId = alt.rechnungId; }
+  }
   if (typ === 'einstellungen' && id === 'firma' && daten.nummernFormat && alt?.nummernFormat !== daten.nummernFormat) {
     speicher.protokoll({ aktion: 'nummernformat', typ, id, geraet, daten: { alt: alt?.nummernFormat, neu: daten.nummernFormat } });
   }
@@ -116,7 +128,7 @@ export async function freigabenAusfuehren(speicher, { geraet = 'laptop', heute =
     const nummer = rechnungsnummer(firma.nummernFormat, jahr, laufend);
     const vergeben = speicher.alle('rechnungen').some(r => r.nummer === nummer && r.id !== entwurf.id);
     if (vergeben) { ablehnen([`Die Rechnungsnummer ${nummer} ist schon vergeben – bitte Nummernkreis in den Einstellungen prüfen.`]); continue; }
-    const e = festschreiben({ entwurf, firma, kunde, nummer, datum: heute, original, zeitpunkt });
+    const e = festschreiben({ entwurf, firma, kunde, nummer, datum: heute, original, zeitpunkt, kategorien: speicher.alle('kategorien') });
     if (!e.ok) { ablehnen(e.pruefung.fehler.map(f => f.text)); continue; }
     let pdf = null;
     if (pdfErzeugen) {
@@ -133,15 +145,36 @@ export async function freigabenAusfuehren(speicher, { geraet = 'laptop', heute =
         speicher.schreiben('rechnungen', original.id, { ...original, status: 'storniert', storniertDurch: entwurf.id, _geaendert: zeitpunkt, _geraet: geraet });
         speicher.protokoll({ aktion: 'storniert', typ: 'rechnungen', id: original.id, geraet, daten: { durch: nummer } });
       }
-      // Erfassungen, die in diese Rechnung eingeflossen sind, gelten als abgerechnet
-      for (const eid of entwurf.erfassungen || []) {
-        const er = speicher.holen('erfassungen', eid);
-        if (er && er.status !== 'abgerechnet') speicher.schreiben('erfassungen', eid, { ...er, status: 'abgerechnet', rechnungId: entwurf.id, _geaendert: zeitpunkt, _geraet: geraet });
+      // Notizen, die in diese Rechnung eingeflossen sind, gelten als abgerechnet
+      for (const nid of entwurf.notizen || []) {
+        const n = speicher.holen('notizen', nid);
+        if (n && !n._geloescht && n.status !== 'abgerechnet') speicher.schreiben('notizen', nid, { ...n, status: 'abgerechnet', rechnungId: entwurf.id, _geaendert: zeitpunkt, _geraet: geraet });
       }
     });
     ergebnisse.push({ id: entwurf.id, ok: true, nummer });
   }
   return ergebnisse;
+}
+
+/**
+ * Abschrift einer Sprachaufnahme an alle Notizen hängen, die diese Aufnahme tragen (nur der Laptop ruft das auf).
+ * @param {string} dateiId  Kennung der Aufnahme
+ * @param {{ text?: string, status: 'fertig'|'keine-erkennung'|'fehler' }} ergebnis
+ * @returns {number} Anzahl geänderter Notizen
+ */
+export function abschriftSetzen(speicher, dateiId, { text = '', status }, { geraet = 'laptop', zeitpunkt = new Date().toISOString() } = {}) {
+  let n = 0;
+  for (const notiz of speicher.alle('notizen')) {
+    if (notiz._geloescht || notiz.audio !== dateiId) continue;
+    if (notiz.abschriftStatus === status && (notiz.abschrift || '') === (text || '')) continue;
+    speicher.transaktion(() => {
+      // _geaendert bleibt: die Abschrift soll keine Textänderung eines Geräts „überholen" (die würde sonst als älter verworfen)
+      speicher.schreiben('notizen', notiz.id, { ...notiz, abschrift: text || null, abschriftStatus: status, abschriftZeit: zeitpunkt });
+      speicher.protokoll({ aktion: 'abschrift', typ: 'notizen', id: notiz.id, geraet, daten: { status, laenge: (text || '').length } });
+    });
+    n++;
+  }
+  return n;
 }
 
 /** Alles seit einer seq (für den Abgleich des Geräts). */
