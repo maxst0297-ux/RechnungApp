@@ -1,0 +1,25 @@
+{
+  "name": "rechnungapp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RechnungApp – Rechnungen für Handwerksbetriebe: am Handy erfassen, am Laptop speichern, beide Geräte gleichen sich ab",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "test": "node --test \"test/*.test.js\"",
+    "vorschau": "node scripts/build-vorschau.mjs",
+    "muster": "node scripts/muster-rechnung.mjs"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "dependencies": {
+    "express": "^5.2.1",
+    "pdf-lib": "^1.17.1",
+    "qrcode-generator": "^2.0.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

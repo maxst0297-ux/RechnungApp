@@ -1,6 +1,6 @@
 # RechnungApp – Fahrplan
 
-**Stand:** 1. Oktober 2026 · **Grundlage:** MyDesk (Version vom 28.09.2026) · **Status:** Planung, noch kein Code
+**Stand:** 1. Oktober 2026 · **Grundlage:** MyDesk (Version vom 28.09.2026) · **Status:** erste Version gebaut (Entwurf) – Stand und neue Reihenfolge in Abschnitt 0
 
 > **Wichtig:** Dieser Fahrplan fasst die Rechtslage nach bestem Wissen zusammen (Stand Oktober 2026). Er ist keine
 > Steuer- oder Rechtsberatung. Bevor die erste echte Rechnung rausgeht, sollte ein Steuerberater einmal über die
@@ -8,6 +8,7 @@
 
 ## Inhalt
 
+0. [Stand und Entscheidungen (Update)](#0-stand-und-entscheidungen-update-1-oktober-2026)
 1. [Kurzfassung](#1-kurzfassung)
 2. [Was MyDesk schon mitbringt](#2-was-mydesk-schon-mitbringt)
 3. [Grundsatzentscheidung: eigene App neben MyDesk](#3-grundsatzentscheidung-eigene-app-neben-mydesk)
@@ -24,6 +25,65 @@
 
 ---
 
+## 0. Stand und Entscheidungen (Update 1. Oktober 2026)
+
+**Deine Antworten**
+- Handwerksbetrieb (Firma), **umsatzsteuerpflichtig** – also Regelbesteuerung, kein Kleinunternehmer.
+- Kunden: **Privatleute, Firmen und Behörden** (Anteile offen).
+- **Gespeichert wird auf dem Laptop**, nicht auf der NAS. Handy und Laptop arbeiten gleichzeitig und gleichen sich
+  gegenseitig ab.
+
+**Was sich dadurch ändert**
+
+| Thema | Vorher geplant | Jetzt |
+|---|---|---|
+| Hauptablage | QNAP-NAS (Docker) | Laptop: Ordner `~/RechnungApp` mit Datenbank, Archiv und Sicherungen |
+| Handy | öffnet die App auf der NAS (nur mit Verbindung) | eigene Kopie auf dem Handy, arbeitet auch offline; Abgleich, sobald der Laptop erreichbar ist |
+| Verbindung | Tailscale zur NAS | Tailscale zum Laptop (HTTPS über `tailscale serve`) – funktioniert auch unterwegs |
+| Gleichzeitig arbeiten | – | Jede Änderung wird fortlaufend gezählt. Ändern zwei Geräte denselben Eintrag, gewinnt die neuere Änderung, die ältere bleibt im Protokoll. Rechnungs- und Kundennummern vergibt nur der Laptop. |
+| Sicherung | NAS + USB-Platte | tägliche Kopie der Datenbank + Time Machine auf eine externe Platte + eine Kopie außer Haus |
+| E-Rechnung | Etappe 7 | **vorgezogen**: Behörden verlangen schon heute XRechnung; Firmenkunden ab 1.1.2028 (bzw. 1.1.2027 bei mehr als 800.000 € Vorjahresumsatz) |
+| Handwerk | allgemein | Ausweis der Arbeitskosten (§ 35a EStG), § 13b (Bauleistung an Bauunternehmer) und Grundstückshinweise sind eingebaut; Abschlags- und Schlussrechnungen rücken vor |
+
+**Was schon gebaut ist (erste Version)**
+- **Laptop-Server** (`server.js`): SQLite-Datenbank, Abgleich mit beliebig vielen Geräten, Live-Meldung an offene
+  Geräte, Festschreiben mit Nummernvergabe, PDF nach DIN 5008 mit GiroCode, schreibgeschütztes Archiv mit
+  SHA-256-Prüfsumme, Änderungsprotokoll mit Prüfsummen-Kette, tägliche Sicherung, optional PIN.
+- **App für Handy und Laptop:** Übersicht; Rechnungen mit Editor, Live-Blatt und Rechts-Check; festgeschriebene
+  Rechnung mit Zahlungen und Storno; Kunden (Privat/Firma/Behörde, § 13b, Leitweg-ID, Zustimmung zur Mail-Rechnung,
+  wiederkehrende Positionen); Leistungskatalog, der mitwächst; Erfassen mit Foto und Notiz/Diktat inklusive
+  Erkennung von Kunde, Leistungen und Mengen; Eingang; Einstellungen.
+- **Offline:** Das Handy startet auch ohne Laptop, speichert alles auf dem Gerät und überträgt es später.
+- **Geprüft:** 11 automatische Tests (Rechnen, Rechts-Check, GiroCode, Erkennung, Server mit zwei Geräten). Im
+  Browser durchgespielt: Handy erfasst → Laptop sieht es nach etwa 1 Sekunde → Laptop schreibt fest → Handy sieht die
+  Nummer; Handy offline → überträgt später automatisch.
+- **Zum Ansehen:** eine Vorschau mit Beispieldaten (der Laptop wird im Browser nachgebildet) und eine
+  Muster-Rechnung als PDF (`docs/Muster-Rechnung.pdf`, neu erzeugen mit `npm run muster`).
+
+**Neue Reihenfolge der Etappen**
+
+| Etappe | Inhalt | Stand |
+|---|---|---|
+| 1 | Grundgerüst: Laptop-Server, Abgleich, Sicherung | erste Version fertig |
+| 2 | Kunden und Leistungskatalog | erste Version fertig |
+| 3 | Rechnung, Rechts-Check, PDF, Storno, Zahlungen | erste Version fertig – Prüfung der Muster-Rechnung durch den Steuerberater offen |
+| 4 | Einrichtung auf deinem Laptop (Autostart, Tailscale, Time Machine), deine echten Leistungen und Kunden | als Nächstes |
+| 5 | E-Rechnung: XRechnung (Behörden) und ZUGFeRD (Firmen), automatische Prüfung vor dem Versand | vorgezogen |
+| 6 | Mailversand direkt aus der App, Zahlungserinnerung und Mahnungen | danach |
+| 7 | Abschlags- und Schlussrechnungen, Angebote | für Handwerk vorgezogen |
+| 8 | Erfassen ausbauen: Dokument-Scanner aus MyDesk, Texterkennung für Belege, Kurzbefehl, Whisper | danach |
+| 9 | Wiederkehrende Rechnungen, Auswertungen, Steuer-Export, Verfahrensdokumentation | danach |
+
+**Noch offen – bitte beantworten**
+1. Versteuerst du nach **Ist oder Soll**? (Steht im Steuerbescheid, sonst weiß es der Steuerberater.)
+2. Lag der **Gesamtumsatz 2026 über 800.000 €**? Dann muss die E-Rechnung an Firmen schon ab 1.1.2027 laufen.
+3. **Welches Gewerk** genau (z. B. Sanitär/Heizung, Elektro, Maler)? Dann passe ich Startkatalog und Beispiele an.
+4. Ist der Laptop ein **Mac**, und ist er tagsüber meist an? Davon hängt ab, wie schnell sich das Handy abgleicht.
+5. Über welches **Mail-Postfach** (Anbieter) sollen die Rechnungen später rausgehen?
+6. Gibt es einen **Steuerberater**, und arbeitet er mit DATEV?
+
+---
+
 ## 1. Kurzfassung
 
 **Ziel:** Eine App, mit der du am Handy festhältst, was du beim Kunden gemacht hast (Foto, Text, Sprache), und am
@@ -33,10 +93,11 @@ bleiben änderbar.
 
 **Die fünf wichtigsten Empfehlungen**
 
-1. **Eigene App „RechnungApp" neben MyDesk** – gleiche Technik, gleiches Design, gleiche NAS, aber getrennte Daten.
+1. **Eigene App „RechnungApp" neben MyDesk** – gleiche Technik, gleiches Design, aber getrennte Daten.
    Geschäftliches gehört nicht zu den Gesundheitsdaten in MyDesk.
-2. **Handy ↔ Laptop über die NAS:** Beide öffnen dieselbe App über Tailscale. Was du am Handy fotografierst oder
-   diktierst, liegt sofort im „Eingang" am Laptop.
+2. **Laptop als Hauptablage, Handy mit eigener Kopie:** Beide arbeiten gleichzeitig und gleichen sich über Tailscale
+   ab. Was du am Handy fotografierst oder diktierst, liegt Sekunden später im „Eingang" am Laptop – ohne Verbindung
+   wartet es auf dem Handy.
 3. **Recht von Anfang an eingebaut:** Pflichtangaben-Prüfung, fortlaufende Nummern, Festschreiben statt Löschen
    (GoBD), passende Steuerhinweise automatisch.
 4. **E-Rechnung von Anfang an mitgedacht:** Die Daten werden so gespeichert, dass ZUGFeRD/XRechnung später ohne Umbau
@@ -50,9 +111,9 @@ bleiben änderbar.
 |---|---|---|
 | Rechnungen automatisch erstellen | Rechnungsassistent; Entwürfe aus Erfassungen und Abos | 3, 5, 6 |
 | nach den offiziellen, rechtlichen Richtlinien | Rechts-Check, Pflichtangaben, GoBD, E-Rechnung | 3, 7, 8 |
-| Schnittstelle Handy ↔ Laptop | gemeinsame App auf der NAS, Live-„Eingang" | 1, 5 |
+| Schnittstelle Handy ↔ Laptop | Laptop speichert, Handy hat eine eigene Kopie, gegenseitiger Abgleich, Live-„Eingang" | 1, 5 |
 | fotografieren mit Texterkennung | Scanner und Texterkennung aus MyDesk | 5 |
-| Spracherkennung | iPhone-Diktat, Kurzbefehl, später Whisper auf der NAS | 5 |
+| Spracherkennung | iPhone-Diktat, Kurzbefehl, später Whisper auf dem Laptop | 5 |
 | Wiederkehrendes anklicken | Standardpositionen je Kunde (vorangehakt), Favoriten, „wie letzte Rechnung" | 2, 3 |
 | Beträge anpassen | jede Position im Entwurf änderbar, Kundenpreise | 2, 3 |
 | Datenbestand, der mitwächst | Leistungskatalog lernt aus jeder Rechnung | 2, 5 |
@@ -80,7 +141,7 @@ Gute Nachricht: Ein großer Teil der Technik existiert schon und ist im Alltag e
 | Erinnerungen per Push, Kalender mit Fristen | `server.js`, `app.js`, `sw.js` | Fälligkeiten, Mahnungen, „Rechnungen bereit zur Freigabe" |
 | PIN und Face ID (Passkey) | `server.js`, `app.js` | Zugangsschutz – hier für die ganze App |
 | Tägliche Sicherung, USB-Spiegel, Prüfbericht | `server.js`, `mydesk-autobuild.sh` | übernehmen, dazu Prüfsummen für Rechnungen |
-| Auto-Update von GitHub, Docker, HTTPS über Tailscale | `mydesk-einrichten.sh`, `mydesk-autobuild.sh`, `docker-compose.yml` | gleiches Verfahren, eigener Container und Port |
+| Auto-Update von GitHub, Docker, HTTPS über Tailscale | `mydesk-einrichten.sh`, `mydesk-autobuild.sh`, `docker-compose.yml` | auf dem Laptop ersetzt durch Autostart und `git pull` |
 | Teilen-Menü (Mail, Dateien …) | `app.js` | Rechnung am Handy weitergeben |
 | Vorschau ohne NAS | `scripts/build-preview.mjs`, `preview/demo-api.js` | neue Oberflächen vorab im Browser testen |
 
@@ -109,7 +170,7 @@ Warum nicht einfach ein weiteres Projekt in MyDesk?
    dagegen darf nicht mehr verändert werden; Fehler werden per Storno oder Korrektur behoben (GoBD).
 3. **Eigene Aufbewahrung.** Rechnungen müssen 8 Jahre lesbar bleiben. Mit eigener Datenbank, eigener Sicherung und
    eigenem Archivordner lässt sich das sauber nachweisen.
-4. **Trotzdem vertraut.** Gleiche Technik, gleiches Design, gleiche NAS, gleiche Update-Automatik. Bewährte Teile
+4. **Trotzdem vertraut.** Gleiche Technik, gleiches Design, gleiche Bedienung. Bewährte Teile
    werden übernommen statt neu geschrieben.
 5. **Verbindung bleibt möglich.** Eine Kachel auf der MyDesk-Startseite kann die RechnungApp öffnen.
 
@@ -204,7 +265,7 @@ erstellt und aufbewahrt werden. Übersetzt in die App:
 | Zeitgerecht | Erinnerung an liegengebliebene Entwürfe und noch nicht abgerechnete Erfassungen |
 | Geordnet | Archiv nach Jahr und Nummer, Suche über alles |
 | Aufbewahren | **8 Jahre** ab Ende des Ausstellungsjahres (seit 2025, Bürokratieentlastungsgesetz IV), maschinell auswertbar und im **Originalformat** – bei E-Rechnungen zählt die **XML-Datei** |
-| Datensicherung | täglich und auf USB (wie MyDesk), **zusätzlich eine Kopie außer Haus** (Brand, Diebstahl) |
+| Datensicherung | täglich in den Ordner `Sicherungen` auf dem Laptop, dazu Time Machine auf eine externe Platte und **eine Kopie außer Haus** (Brand, Diebstahl) |
 | Verfahrensdokumentation | kurze Beschreibung, wie du Rechnungen erstellst, prüfst, versendest und sicherst. Die App erzeugt eine Vorlage und füllt die technischen Teile selbst aus |
 | Datenzugriff bei einer Prüfung | Export aller Rechnungsdaten als CSV plus PDF/XML auf Knopfdruck |
 
@@ -241,7 +302,7 @@ lesbar ist und das Vorgehen in der Verfahrensdokumentation beschrieben ist („m
 
 - Kundendaten verarbeitest du, um den Auftrag abzuwickeln und weil das Gesetz die Aufbewahrung verlangt – das ist
   erlaubt (Art. 6 Abs. 1 b und c DSGVO). Gespeichert wird nur, was nötig ist.
-- **Pluspunkt deiner Lösung:** Alles liegt auf deiner eigenen NAS, Zugriff nur über Tailscale plus PIN/Face ID. Kein
+- **Pluspunkt deiner Lösung:** Alles liegt auf deinem eigenen Laptop, Zugriff nur über Tailscale plus PIN. Kein
   Cloud-Anbieter sieht deine Kundendaten.
 - Kunden informieren (Art. 13): kurzer Datenschutzhinweis, z. B. auf Angebot, Auftrag oder Website.
 - Kurzes Verzeichnis der Verarbeitungstätigkeiten (Art. 30) – die App liefert eine Vorlage.
@@ -322,7 +383,7 @@ Steuerberater · optional DATEV-Format · Datenexport für eine Prüfung.
 
 **M12 · Archiv und Sicherheit**
 Ablage `Rechnungen/<Jahr>/<Nummer>_<Kunde>.pdf` (plus `.xml`) · schreibgeschützt mit Prüfsumme · Prüfbericht (fehlt
-etwas, wurde etwas verändert?) · Aufbewahrungsfristen · PIN/Face ID für die ganze App · tägliche Sicherung, USB-Kopie,
+etwas, wurde etwas verändert?) · Aufbewahrungsfristen · PIN/Face ID für die ganze App · tägliche Sicherung, Time Machine,
 Kopie außer Haus.
 
 **M13 · Später oder optional**
@@ -372,18 +433,18 @@ der § 19-Hinweis da.
 ## 7. Technik und Aufbau
 
 ```
-  iPhone (App auf dem Home-Bildschirm)          Laptop (Browser oder App)
-  Foto · Scan · Diktat · Notiz                  Eingang · prüfen · senden · drucken
-            │                                              │
-            └────────────── Tailscale (HTTPS) ─────────────┘
+  iPhone (App auf dem Home-Bildschirm)            Laptop (Browser oder Dock-App)
+  eigene Kopie der Daten, geht auch offline        Hauptablage
+  Foto · Notiz · Diktat · Rechnung                 Eingang · prüfen · festschreiben · drucken
+            │                                                │
+            └──────── Abgleich über Tailscale (HTTPS) ───────┤
+                                                             │
+          Laptop: Node-Server „RechnungApp" (Port 4200, startet automatisch)
+          ├─ Datenbank: SQLite in ~/RechnungApp/Daten (+ tägliche Sicherung)
+          ├─ Archiv: ~/RechnungApp/Archiv (Rechnungs-PDFs schreibgeschützt, Fotos)
+          └─ Abgleich: zählt jede Änderung, vergibt Nummern, schreibt fest
                                    │
-          QNAP-NAS · Docker-Container „rechnungapp" (Port 4200)
-          ├─ Server: Node 24 + Express (Regeln, PDF/XML, Mail, Push, Zeitpläne)
-          ├─ Datenbank: SQLite in RechnungAppData (+ tägliche Sicherung)
-          ├─ Archiv: RechnungAppBelege (Rechnungen, Fotos, Belege, Sprachnotizen)
-          └─ Texterkennung (Tesseract) · optional Spracherkennung (Whisper)
-                                   │
-          USB-Backup nachts  +  Kopie außer Haus (empfohlen)
+          Time Machine / externe Platte  +  Kopie außer Haus
                                    │
           dein Mail-Postfach (SMTP)  ──►  Kunde
 ```
@@ -398,9 +459,9 @@ der § 19-Hinweis da.
 | Datenmodell | von Anfang an nach EN 16931 (Einheiten-Codes, Steuerkategorien, Zahlungsarten) | E-Rechnung später ohne Umbau |
 | PDF | pdf-lib (wie MyDesk) mit eingebetteter freier Schrift → PDF/A | Langzeitarchiv, Voraussetzung für ZUGFeRD |
 | E-Rechnung | Bibliothek prüfen (z. B. `node-zugferd`, `@stackforge-eu/factur-x`) oder eigene XML-Vorlage; Prüfung mit dem offiziellen KoSIT-Validator bzw. Mustang | Formatversionen wechseln (XRechnung 4.0 kommt 2027) |
-| Mail | `nodemailer` über SMTP deines Postfachs; Zugangsdaten in `secrets/` auf der NAS, nie in Git | Versand auch automatisch (Abos, Mahnungen); über dein echtes Postfach landen Mails seltener im Spam |
-| Handy ↔ Laptop | gleicher Server; Live-Aktualisierung per Server-Sent Events | Foto am Handy → sofort im Eingang am Laptop |
-| Betrieb | Container `rechnungapp`, Port 4200, `tailscale serve --bg --https=8444 http://127.0.0.1:4200`, Freigabeordner `RechnungAppBelege` und `RechnungAppData`, Auto-Update wie MyDesk | gleiche Handgriffe wie bei MyDesk (GesundZurück 4000, MyDesk 4100) |
+| Mail | `nodemailer` über SMTP deines Postfachs; Zugangsdaten in `secrets/` auf dem Laptop, nie in Git | Versand auch automatisch (Abos, Mahnungen); über dein echtes Postfach landen Mails seltener im Spam |
+| Handy ↔ Laptop | jedes Gerät hat eine eigene Kopie (IndexedDB), Abgleich in beide Richtungen, Live-Meldung per Server-Sent Events | Foto am Handy → Sekunden später im Eingang am Laptop, offline wartet es |
+| Betrieb | Node-Server auf dem Laptop (Port 4200, nur lokal erreichbar), Autostart, `tailscale serve --bg --https=443 http://127.0.0.1:4200`, Ablage `~/RechnungApp` | kein Docker nötig; das Handy erreicht den Laptop zu Hause und unterwegs |
 | Zugang | PIN/Face ID für die ganze App (nicht optional) | Geschäftsdaten |
 
 ### Spracherkennung – die Optionen
@@ -409,7 +470,7 @@ der § 19-Hinweis da.
 |---|---|---|---|---|
 | iPhone-Diktat (Mikrofon-Taste der Tastatur) | in jedem Textfeld der App | keiner | auf dem iPhone | Stufe 1 – ab Tag 1 |
 | Kurzbefehl „Notiz an RechnungApp" | Siri oder Action-Button → diktieren → landet im Eingang, ohne die App zu öffnen | klein | wie oben | Stufe 1 |
-| Sprachaufnahme + Whisper auf der NAS | Aufnahme in der App, die NAS schreibt mit; die Aufnahme bleibt als Beleg | mittel; Leistung der NAS vorher testen | bleibt komplett zu Hause | Stufe 2 |
+| Sprachaufnahme + Whisper auf dem Laptop | Aufnahme in der App, der Laptop schreibt mit; die Aufnahme bleibt als Beleg | mittel | bleibt komplett zu Hause | Stufe 2 |
 | Spracherkennung im Browser (Web Speech API) | – | – | – | funktioniert in der Home-Bildschirm-App auf dem iPhone nicht (nur im Safari-Tab) – daher nicht eingeplant |
 | Cloud-Dienst | Aufnahme geht an einen Anbieter | klein | Vertrag zur Auftragsverarbeitung nötig, Kosten | nur, wenn du es willst |
 
@@ -443,10 +504,13 @@ Protokoll    zeit, geraet, aktion, objekt, vorher, nachher   (wird nur ergänzt,
 
 ## 8. Der Fahrplan in Etappen
 
+> **Update:** Stand und neue Reihenfolge stehen in [Abschnitt 0](#0-stand-und-entscheidungen-update-1-oktober-2026). Die
+> Beschreibungen unten bleiben als Detailplan gültig.
+
 | Etappe | Inhalt | Ergebnis | Umfang |
 |---|---|---|---|
-| 0 | Klären und Sammeln | Antworten, Daten, NAS-Ordner | du |
-| 1 | Grundgerüst | App läuft auf der NAS, Stammdaten sind drin | mittel |
+| 0 | Klären und Sammeln | Antworten und Daten | du |
+| 1 | Grundgerüst | App läuft auf dem Laptop, Stammdaten sind drin | mittel |
 | 2 | Kunden und Leistungskatalog | Datenbestand steht | mittel |
 | 3 | Rechnung, PDF, Drucken | **erste echte Rechnung** | groß |
 | 4 | Mailversand, Zahlungen, Mahnungen | Rechnung geht raus, Zahlungen im Blick | mittel |
@@ -461,19 +525,19 @@ Die Etappen 5 bis 7 lassen sich tauschen: Hast du viele Firmenkunden, ziehen wir
 ### Etappe 0 – Klären und Sammeln (vor dem ersten Code)
 - Fragen aus [Abschnitt 10](#10-offene-fragen-an-dich) beantworten
 - Daten zusammentragen ([Abschnitt 9 B](#9-voraussetzungen--checkliste))
-- NAS: zwei Freigabeordner anlegen (`RechnungAppBelege`, `RechnungAppData`)
+- Laptop: Node.js 24 installieren, Tailscale auf Laptop und iPhone
 - Falls vorhanden, mit dem Steuerberater klären: Steuerstatus, gewünschtes Exportformat
 
 **Fertig, wenn:** Steuerstatus, Kundenarten und Versandweg feststehen.
 
 ### Etappe 1 – Grundgerüst
 - Repo mit der MyDesk-Basis aufsetzen: Server, App-Rahmen, Design und Themes, Login mit PIN/Face ID, Fehlerprotokoll
-- Docker, Einrichtungs- und Autobuild-Skript, HTTPS über Tailscale, Sicherung (täglich und USB), Prüfbericht
+- Laptop-Server mit Autostart, HTTPS über Tailscale, tägliche Sicherung, Prüfbericht
 - SQLite-Datenbank mit Änderungsprotokoll
 - „Mein Unternehmen": Stammdaten, Steuerstatus, Bank, Logo, Nummernkreis, Zahlungsbedingungen
-- Vorschau-Version zum Testen ohne NAS
+- Vorschau-Version zum Testen ohne Laptop-Server
 
-**Fertig, wenn:** Die App läuft auf der NAS, Handy und Laptop öffnen sie, die Stammdaten sind gespeichert und die
+**Fertig, wenn:** Die App läuft auf dem Laptop, Handy und Laptop öffnen sie, die Stammdaten sind gespeichert und die
 Sicherung läuft.
 
 ### Etappe 2 – Kunden und Leistungskatalog
@@ -507,8 +571,7 @@ Rechnung ist raus.
 - Eingang am Laptop mit Live-Aktualisierung; einem Kunden zuordnen → in die Rechnung übernehmen
 - Texterkennung für Material-Belege (Betrag, Lieferant, Datum) → Position „Material laut Beleg" (optional mit
   Aufschlag)
-- Sprache Stufe 1: iPhone-Diktat und Kurzbefehl „Notiz an RechnungApp"; Stufe 2: Whisper auf der NAS (nach einem
-  Leistungstest)
+- Sprache Stufe 1: iPhone-Diktat und Kurzbefehl „Notiz an RechnungApp"; Stufe 2: Whisper auf dem Laptop
 - Positionsvorschläge aus Text, die aus deinen Korrekturen lernen
 - Fotodokumentation je Kunde, optional als Anlage zur Rechnung
 
@@ -574,19 +637,20 @@ Kunden im EU-Ausland.
 - [ ] Mail-Postfach für den Versand mit SMTP-Zugang (App-Passwort), am besten eine geschäftliche Adresse
 
 **C · Technik**
-- [ ] NAS mit Docker (vorhanden) – zwei neue Freigabeordner `RechnungAppBelege` und `RechnungAppData`
-- [ ] GitHub-Repo RechnungApp (vorhanden) und ein Deploy-Key für die NAS (wie bei MyDesk)
-- [ ] Tailscale auf iPhone und Laptop (vorhanden), neuer HTTPS-Port (Vorschlag 8444)
+- [ ] Laptop mit Node.js 24 LTS (kostenlos, nodejs.org)
+- [ ] GitHub-Repo RechnungApp (vorhanden) – der Laptop holt Updates per `git pull`
+- [ ] Tailscale auf iPhone und Laptop (gleiches Konto); in der Tailscale-Verwaltung MagicDNS und HTTPS-Zertifikate einschalten
 - [ ] Kopie außer Haus für das Archiv (z. B. verschlüsselte Cloud-Sicherung oder eine zweite Platte an einem anderen
       Ort)
-- [ ] NAS-Modell nennen – davon hängt ab, ob Spracherkennung auf der NAS schnell genug läuft
+- [ ] Externe Platte für Time Machine (Sicherung des ganzen Laptops)
 - [ ] Optional: Zugangsschlüssel für einen KI-Dienst, falls du Stufe 2 möchtest
 
 ---
 
 ## 10. Offene Fragen an dich
 
-Die ersten drei sind die wichtigsten – davon hängen die Steuerhinweise und die Reihenfolge der Etappen ab.
+> **Update:** Beantwortet sind 1 (umsatzsteuerpflichtig), 2 (Handwerk), 3 (Privat, Firmen, Behörden) und 5 (eigene App).
+> Was noch offen ist, steht in [Abschnitt 0](#0-stand-und-entscheidungen-update-1-oktober-2026).
 
 1. **Steuerstatus:** Kleinunternehmer oder mit Umsatzsteuer? Falls mit: Ist- oder Soll-Versteuerung? Liegt dein
    Umsatz deutlich unter 800.000 €?
@@ -597,7 +661,7 @@ Die ersten drei sind die wichtigsten – davon hängen die Steuerhinweise und di
    Betrag)?
 5. **Eigene App** neben MyDesk (Empfehlung) – einverstanden?
 6. **Versand:** direkt aus der App über dein Mail-Postfach (welcher Anbieter?) oder über das Teilen-Menü am Handy?
-7. **KI:** Alles strikt offline auf der NAS – oder darf optional ein Cloud-Dienst helfen (bessere Erkennung von
+7. **KI:** Alles strikt offline auf dem Laptop – oder darf optional ein Cloud-Dienst helfen (bessere Erkennung von
    Handschrift und freier Sprache)?
 8. **Steuerberater:** vorhanden? Welches Format möchte er (DATEV, Excel, PDF)?
 9. **Extras:** Brauchst du Angebote, Abschlagsrechnungen, Zeiterfassung oder eine Unterschrift des Kunden?
@@ -611,12 +675,13 @@ Die ersten drei sind die wichtigsten – davon hängen die Steuerhinweise und di
 |---|---|
 | Falsche Steuerangaben sind teuer (z. B. Steuer ausgewiesen als Kleinunternehmer → wird trotzdem geschuldet) | Rechts-Check, Abnahme der Musterrechnungen durch den Steuerberater in Etappe 3 |
 | Doppelte oder verlorene Rechnungsnummern | Nummer erst beim Festschreiben, Datenbank-Transaktion, Prüfbericht |
-| Datenverlust – NAS und USB-Platte stehen am selben Ort | zusätzliche Kopie außer Haus; Prüfsummen im Prüfbericht |
-| NAS nicht erreichbar (Strom, Tailscale, Update) | Rückfall auf die alte Version beim Update (wie MyDesk); später „Erfassen ohne Netz" |
+| Datenverlust – der Laptop kann kaputtgehen oder gestohlen werden | tägliche Sicherung, Time Machine, Kopie außer Haus, Festplattenverschlüsselung (FileVault) |
+| Gleichzeitige Änderung desselben Eintrags auf zwei Geräten | die neuere Änderung gewinnt, die ältere bleibt im Protokoll; Nummern vergibt nur der Laptop |
+| Laptop aus oder zugeklappt | das Handy arbeitet weiter und gleicht später ab; für schnellen Abgleich den Laptop tagsüber anlassen |
 | iPhone-Grenzen: Browser-Spracherkennung geht in der Home-Bildschirm-App nicht; Mitteilungen nur, wenn die App auf dem Home-Bildschirm liegt | Diktat, Kurzbefehl und Whisper statt Browser-Spracherkennung |
 | Texterkennung, Sprache und KI können sich irren | alles Vorgeschlagene bleibt rot, bis du es bestätigst; nichts geht ohne Freigabe raus (außer du schaltest die Vollautomatik für Abos ein) |
 | E-Rechnungsformate ändern sich (XRechnung 4.0 ab 2027) | Bibliothek und Prüfregeln aktuell halten, Testrechnungen bei jedem Update |
-| Rechnungs-Mails landen im Spam | Versand über dein echtes Postfach statt direkt von der NAS, möglichst eigene Domain |
+| Rechnungs-Mails landen im Spam | Versand über dein echtes Postfach statt direkt vom Laptop, möglichst eigene Domain |
 | Gesetze ändern sich | Regeln einmal im Jahr prüfen, den Basiszins halbjährlich |
 
 ---
