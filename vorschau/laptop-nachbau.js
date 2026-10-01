@@ -5,7 +5,7 @@ import { aenderungenUebernehmen, freigabenAusfuehren, seit, abschriftSetzen } fr
 import { beispieldatenAnlegen, diktatBeispiel, aufnahmeNachbilden } from './beispieldaten.js';
 
 const DB = 'rechnungapp-vorschau-laptop';
-const DATENSTAND = 2;   // bei geänderten Beispieldaten erhöhen → die Vorschau legt alles neu an
+const DATENSTAND = 3;   // bei geänderten Beispieldaten erhöhen → die Vorschau legt alles neu an
 const pause = ms => new Promise(ok => setTimeout(ok, ms));
 
 function kv(modus, wert) {

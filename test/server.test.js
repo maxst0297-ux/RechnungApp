@@ -1,7 +1,7 @@
 // Ende-zu-Ende-Test des Laptop-Servers mit zwei simulierten Geräten (Handy + Laptop):
 // Abgleich in beide Richtungen, gleichzeitige Änderungen, Freigabe mit Nummernvergabe, PDF im Archiv,
 // Schutz festgeschriebener Rechnungen, Storno, Dateiablage, Protokoll-Kette – und Baustellen, Notizen mit
-// Sprachaufnahme (abgetippt von einem Ersatz für whisper.cpp), Gliederung nach Kategorien, Umzug alter Erfassungen.
+// Sprachaufnahme (abgetippt von einem Ersatz für whisper.cpp), Rechnung aus der Notiz, Umzug alter Erfassungen.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execFileSync } from 'node:child_process';
@@ -133,7 +133,7 @@ test('Abgleich, Konflikt, Festschreiben, Schutz, Storno, Dateien', async () => {
   assert.ok(status.sicherungen.length >= 1);
 });
 
-test('Baustellen, Notiz mit Sprachaufnahme, Abschrift vom Laptop, Gliederung im PDF, Umzug alter Erfassungen', async () => {
+test('Baustellen, Notiz mit Sprachaufnahme, Abschrift vom Laptop, Rechnung aus der Notiz, Umzug alter Erfassungen', async () => {
   const status = await (await fetch(URL + '/api/status')).json();
   assert.equal(status.diktat.verfuegbar, true, JSON.stringify(status.diktat));
 
@@ -166,18 +166,19 @@ test('Baustellen, Notiz mit Sprachaufnahme, Abschrift vom Laptop, Gliederung im 
   const datei = fs.readdirSync(join(ORDNER, 'Archiv', 'Notizen'), { recursive: true }).filter(f => String(f).endsWith('a1.wav'));
   assert.equal(datei.length, 1, 'Aufnahme liegt im Archiv-Ordner');
 
-  // Rechnung aus der Notiz, nach Kategorien gegliedert → festschreiben → Notiz abgerechnet, PDF mit Zwischensummen
+  // Rechnung aus der Notiz → festschreiben → Notiz abgerechnet, PDF ohne Gliederung (Reihenfolge wie eingegeben)
   const l = await abgleich('laptop2', 0, [{ typ: 'rechnungen', id: 'r9', basis: 0, geaendert: jetzt(), daten: {
-    typ: 'rechnung', kundeId: 'k9', baustelleId: 'b1', leistungVon: '2026-09-30', amGrundstueck: true, gliedern: true, notizen: ['n1'], betreff: 'Bauvorhaben: Bad OG Schneider',
+    typ: 'rechnung', kundeId: 'k9', baustelleId: 'b1', leistungVon: '2026-09-30', amGrundstueck: true, notizen: ['n1'], betreff: 'Bauvorhaben: Bad OG Schneider',
     positionen: [{ id: 'q1', bezeichnung: 'Eckventil 1/2"', menge: 1, einheit: 'Stk.', preisCent: 1490, steuersatz: 19, art: 'material', kategorieId: 'kM' },
       { id: 'q2', bezeichnung: 'Arbeitszeit Geselle', menge: 0.5, einheit: 'Std.', preisCent: 5800, steuersatz: 19, art: 'arbeit', kategorieId: 'kA' }],
     freigabe: { angefordert: jetzt(), geraet: 'laptop' } } }]);
   assert.equal(l.freigaben[0].ok, true, JSON.stringify(l.freigaben));
   const r = finde(l, 'rechnungen', 'r9');
-  assert.deepEqual(r.fest.positionen.map(p => [p.bezeichnung, p.gruppe]), [['Arbeitszeit Geselle', 'Arbeitszeit'], ['Eckventil 1/2"', 'Material']]);
+  assert.deepEqual(r.fest.positionen.map(p => p.bezeichnung), ['Eckventil 1/2"', 'Arbeitszeit Geselle']);
   assert.equal(finde(l, 'notizen', 'n1').status, 'abgerechnet');
   const text = execFileSync('pdftotext', ['-layout', join(ORDNER, r.pdf.datei), '-']).toString().replace(/\s+/g, ' ');
-  for (const t of ['Bauvorhaben: Bad OG Schneider', 'Arbeitszeit', 'Summe Arbeitszeit 29,00 €', 'Summe Material 14,90 €', '52,24 €']) assert.ok(text.includes(t), 'PDF enthält ' + t + ' – Text: ' + text.slice(0, 1600));
+  for (const t of ['Bauvorhaben: Bad OG Schneider', 'Eckventil 1/2"', '14,90 €', '29,00 €', '52,24 €']) assert.ok(text.includes(t), 'PDF enthält ' + t + ' – Text: ' + text.slice(0, 1600));
+  assert.ok(!text.includes('Summe Arbeitszeit'), 'keine Zwischensummen je Kategorie');
   const st2 = await (await fetch(URL + '/api/status')).json();
   assert.equal(st2.protokoll.ok, true);
 });

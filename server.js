@@ -230,7 +230,7 @@ app.get('/api/rechnungen/:id/pdf', async (req, res) => {
   const firma = speicher.holen('einstellungen', 'firma') || {};
   const kunde = r.kundeId ? speicher.holen('kunden', r.kundeId) : null;
   const original = r.stornoVon ? speicher.holen('rechnungen', r.stornoVon) : null;
-  const { fest } = festeFassung({ entwurf: r, firma, kunde, nummer: '', datum: heuteIso(), original, kategorien: speicher.alle('kategorien') });
+  const { fest } = festeFassung({ entwurf: r, firma, kunde, nummer: '', datum: heuteIso(), original });
   const bytes = await erstelleRechnungsPdf({ fest, logo: firma.logo, entwurf: true });
   res.setHeader('Content-Disposition', `${art}; filename="Rechnung_Entwurf.pdf"`);
   res.setHeader('Cache-Control', 'no-store');

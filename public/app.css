@@ -1,5 +1,5 @@
 /* RechnungApp – Gestaltung im MyDesk-Stil „Nacht & Gold".
-   Layout: Handy – Kopfzeile, Inhalt, Tab-Leiste unten mit goldenem Notiz-Knopf (Diktat).
+   Layout: Handy – Kopfzeile, Inhalt, Tab-Leiste unten mit goldenem ⊕ (Notiz oder Rechnung).
            Laptop (ab 900 px) – Seitenleiste links, Inhalt rechts; der Rechnungseditor zeigt rechts daneben das Blatt live.
    Die Rechnung selbst erscheint immer als weißes Papier – so, wie sie gedruckt und verschickt wird. */
 
@@ -97,8 +97,9 @@ svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor;
   border-top: 1px solid var(--linie); padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0px)); }
 .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; background: none; border: 0; padding: 6px 2px; font-size: 10.5px; font-weight: 600; color: var(--text-leise); cursor: pointer; }
 .tab.aktiv { color: var(--gold); }
-.tab.mitte .kreis { width: 52px; height: 52px; margin-top: -22px; border-radius: 50%; background: var(--gold); color: var(--auf-gold); display: grid; place-items: center; box-shadow: 0 6px 18px rgba(201, 160, 99, .35); border: 3px solid var(--grund); }
-.tab.mitte .kreis svg.i { width: 24px; height: 24px; stroke-width: 2.2; }
+.tab.mitte { justify-content: center; }
+.tab.mitte .kreis { width: 52px; height: 52px; margin-top: -26px; border-radius: 50%; background: var(--gold); color: var(--auf-gold); display: grid; place-items: center; box-shadow: 0 6px 18px rgba(201, 160, 99, .35); border: 3px solid var(--grund); }
+.tab.mitte .kreis svg.i { width: 26px; height: 26px; stroke-width: 2.4; }
 
 @media (min-width: 900px) {
   .rahmen { grid-template-columns: 236px 1fr; }
@@ -113,6 +114,8 @@ svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor;
   .nav.aktiv { color: var(--text); background: var(--gold-flaeche); box-shadow: inset 2px 0 0 var(--gold); }
   .nav .zaehler { margin-left: auto; font-size: 11px; background: var(--gold); color: var(--auf-gold); border-radius: 999px; padding: 1px 7px; }
   .seitenleiste .fuss { margin-top: auto; display: grid; gap: 8px; }
+  .seitenleiste .neu-knopf { margin: 0 0 12px; }
+  .nav-trenner { border: 0; border-top: 1px solid var(--linie); margin: 8px 10px; }
   .seitenleiste .abgleich { max-width: 100%; justify-content: flex-start; }
 }
 .marke-zeichen { width: 34px; height: 34px; border-radius: 9px; background: var(--gold); color: var(--auf-gold); display: grid; place-items: center; flex: none; }
@@ -147,13 +150,6 @@ svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor;
 .kennzahl.warn strong { color: var(--rot); }
 @media (max-width: 420px) { .kennzahl strong { font-size: 16px; } }
 
-.aktionen-gross { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.aktion { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 14px; border-radius: var(--radius); border: 1px solid var(--linie); background: var(--flaeche); cursor: pointer; font-weight: 800; font-size: 14px; text-align: left; color: var(--text); }
-.aktion .marke-zeichen { width: 36px; height: 36px; }
-.aktion:hover { border-color: var(--gold); }
-.aktion.haupt { background: var(--gold); color: var(--auf-gold); border-color: var(--gold); }
-.aktion.haupt .marke-zeichen { background: var(--auf-gold); color: var(--gold); }
-
 .liste { display: grid; }
 .zeile { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 12px 2px; border-bottom: 1px solid var(--linie); cursor: pointer; background: none; border-left: 0; border-right: 0; border-top: 0; text-align: left; width: 100%; color: var(--text); }
 .zeile:last-child { border-bottom: 0; }
@@ -170,9 +166,16 @@ svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor;
 .zeile2 .neben { font-size: 13px; color: var(--text-leise); }
 .mehr-zeile { display: flex; align-items: center; gap: 12px; }
 .mehr-symbol { width: 38px; height: 38px; border-radius: 10px; background: var(--gold-flaeche); color: var(--gold); display: grid; place-items: center; flex: none; }
-.mehr-text { flex: 1; display: grid; min-width: 0; }
-.mehr-text small { color: var(--text-leise); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mehr-text { flex: 1; min-width: 0; font-weight: 600; }
 .mehr-zeile > svg.i { color: var(--text-leise); }
+.zahl-badge { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 7px; border-radius: 999px; background: var(--gold-flaeche); color: var(--gold); font-size: 12px; font-weight: 800; }
+.stern { color: var(--gold); }
+.status-ort:empty { display: none; }
+.hinweis-text { margin: 0; padding: 0 4px; font-size: 13.5px; color: var(--text-leise); white-space: pre-wrap; }
+.knopfreihe.zwei { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.leise-reihe { justify-content: center; gap: 2px 6px; }
+.leise-reihe:empty { display: none; }
+.knopf.leise.warnfarbe { color: var(--rot); }
 .leer { padding: 22px 6px; text-align: center; color: var(--text-leise); font-size: 14px; }
 
 .pille { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 2px 9px; font-size: 11.5px; font-weight: 800; letter-spacing: .02em; border: 1px solid currentColor; white-space: nowrap; }
@@ -254,7 +257,6 @@ input.fehlt, select.fehlt { border-color: var(--rot); }
 .positionen { display: grid; gap: 10px; }
 .pos { border: 1px solid var(--linie); border-radius: var(--radius-klein); padding: 10px; display: grid; gap: 8px; background: var(--grund); }
 .pos.aus { opacity: .55; }
-.pos.mit-kat { border-left: 3px solid var(--k); }
 .pos .oben { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .pos .oben input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--gold); margin: 0; }
 .pos .werte { display: grid; grid-template-columns: 80px 108px 110px 84px minmax(0, 1fr); gap: 8px; align-items: end; }
@@ -302,79 +304,67 @@ input.fehlt, select.fehlt { border-color: var(--rot); }
 .im-editor > div { flex: 1; min-width: 0; }
 .im-editor > svg.i { color: var(--gold); }
 
-/* Notiz erfassen */
-.notiz-erfassen { display: grid; gap: 12px; grid-template-columns: minmax(0, 1fr); }
-.notiz-erfassen textarea { min-height: 112px; font-size: 16px; }
-.baustellen-wahl .chip { max-width: 72vw; overflow: hidden; text-overflow: ellipsis; }
-.ort-zeile { display: flex; gap: 6px; align-items: center; font-size: 12.5px; color: var(--text-leise); margin-top: 8px; min-width: 0; }
-.ort-zeile svg.i { width: 15px; height: 15px; }
-.ort-zeile span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ort-zeile em { color: var(--gold); font-style: normal; }
+/* Notiz (eigener Bildschirm) */
+.notiz-seite textarea { min-height: 150px; font-size: 16px; line-height: 1.45; }
 .notiz-leiste { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-.notiz-leiste .datum-feld { margin-left: auto; }
-.notiz-leiste .datum-feld input { width: auto; }
+.notiz-leiste #diktat:empty { display: none; }
+.knopf.symbol { width: 42px; padding: 0; }
+.datum-knopf { position: relative; margin-left: auto; padding: 0 8px; color: var(--text-leise); font-weight: 600; }
+.datum-knopf svg.i { width: 17px; height: 17px; }
+.datum-knopf input { position: absolute; inset: 0; opacity: 0; width: 100%; min-height: 0; padding: 0; border: 0; cursor: pointer; }
 .foto-knopf { position: relative; overflow: hidden; }
 .foto-knopf input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.erkannt-zeile { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; color: var(--text-leise); padding: 0 2px; }
+.erkannt-zeile:empty { display: none; }
+.erkannt-zeile svg.i { width: 16px; height: 16px; color: var(--gold); margin-top: 1px; }
 .fotos { display: flex; gap: 8px; flex-wrap: wrap; }
-.foto { position: relative; width: 84px; height: 84px; border-radius: var(--radius-klein); overflow: hidden; border: 1px solid var(--linie); background: var(--grund); flex: none; }
+.foto { position: relative; width: 76px; height: 76px; border-radius: var(--radius-klein); overflow: hidden; border: 1px solid var(--linie); background: var(--grund); flex: none; }
 .foto-oeffnen { display: block; width: 100%; height: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .foto img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .foto .loeschen { position: absolute; top: 2px; right: 2px; background: rgba(0, 0, 0, .55); color: #fff; padding: 3px; }
 .foto-gross img { display: block; width: 100%; max-height: 72vh; object-fit: contain; border-radius: var(--radius-klein); background: #000; }
-.erkannt { display: grid; gap: 8px; }
 
 /* Diktat */
-.diktat { display: grid; gap: 6px; }
-.diktat-knopf { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 66px; padding: 10px 14px; border-radius: var(--radius);
-  border: 1px dashed color-mix(in srgb, var(--gold) 60%, transparent); background: var(--gold-flaeche); color: var(--text); cursor: pointer; text-align: left; }
-.diktat-knopf:hover { border-style: solid; }
-.diktat-symbol { width: 46px; height: 46px; border-radius: 50%; background: var(--gold); color: var(--auf-gold); display: grid; place-items: center; flex: none; }
-.diktat-symbol svg.i { width: 23px; height: 23px; stroke-width: 2; }
-.diktat-text { display: grid; flex: 1; min-width: 0; }
-.diktat-text strong { font-size: 15.5px; }
-.diktat-text small { color: var(--text-leise); font-size: 12.5px; }
-.diktat-knopf.an { border-style: solid; border-color: color-mix(in srgb, var(--rot) 70%, transparent); background: color-mix(in srgb, var(--rot) 12%, transparent); }
-.diktat-knopf.an .diktat-symbol { background: var(--rot); color: #fff; animation: ring 1.4s ease-out infinite; }
-@keyframes ring { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--rot) 55%, transparent); } 100% { box-shadow: 0 0 0 14px transparent; } }
-.pegel { display: flex; align-items: center; gap: 3px; height: 30px; flex: none; --p: .15; }
-.pegel i { display: block; width: 4px; border-radius: 2px; background: var(--rot); height: calc(5px + var(--p) * 25px); transition: height .08s linear; }
-.pegel i:nth-child(1), .pegel i:nth-child(5) { height: calc(5px + var(--p) * 11px); }
-.pegel i:nth-child(2), .pegel i:nth-child(4) { height: calc(5px + var(--p) * 18px); }
-.pegel.auto i { height: 22px; animation: wippen .9s ease-in-out infinite; transform-origin: center; }
-.pegel.auto i:nth-child(2) { animation-delay: .12s; } .pegel.auto i:nth-child(3) { animation-delay: .24s; }
-.pegel.auto i:nth-child(4) { animation-delay: .36s; } .pegel.auto i:nth-child(5) { animation-delay: .48s; }
-@keyframes wippen { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
-.zwischen { font-style: italic; color: var(--text-leise); font-size: 14.5px; padding: 0 4px; }
+.diktat-pille { gap: 8px; }
+.diktat-pille.an { background: color-mix(in srgb, var(--rot) 16%, transparent); border-color: color-mix(in srgb, var(--rot) 70%, transparent); color: var(--text); font-variant-numeric: tabular-nums; }
+.diktat-pille.an:hover { background: color-mix(in srgb, var(--rot) 22%, transparent); border-color: var(--rot); }
+.diktat-pille.an svg.i { color: var(--rot); }
+.pegel { display: inline-flex; align-items: center; gap: 2px; height: 18px; --p: .15; }
+.pegel i { display: block; width: 3px; border-radius: 2px; background: var(--rot); height: calc(4px + var(--p) * 14px); transition: height .08s linear; }
+.pegel i:nth-child(1), .pegel i:nth-child(4) { height: calc(4px + var(--p) * 8px); }
+.pegel.auto i { height: 14px; animation: wippen .9s ease-in-out infinite; transform-origin: center; }
+.pegel.auto i:nth-child(2) { animation-delay: .15s; } .pegel.auto i:nth-child(3) { animation-delay: .3s; } .pegel.auto i:nth-child(4) { animation-delay: .45s; }
+@keyframes wippen { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
+.zwischen { font-style: italic; color: var(--text-leise); font-size: 14.5px; padding: 0 4px; margin-top: -6px; }
 .zwischen:empty { display: none; }
-.diktat-art { padding: 0 4px; }
-.aufnahme { display: grid; gap: 8px; padding: 10px; border: 1px solid var(--linie); border-radius: var(--radius-klein); background: var(--grund); }
-.aufnahme-kopf { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; }
-.aufnahme-kopf svg.i { color: var(--gold); }
-.aufnahme-kopf .knopf { margin-left: auto; min-height: 30px; }
+.aufnahme { display: grid; gap: 6px; }
+.aufnahme-kopf { display: flex; align-items: center; gap: 6px; }
+.aufnahme-kopf audio { flex: 1; min-width: 0; }
+.aufnahme > span svg.i, .notiz-karte p svg.i { width: 15px; height: 15px; vertical-align: -3px; color: var(--gold); }
 audio { width: 100%; height: 40px; display: block; }
-.abschrift { display: flex; gap: 9px; align-items: flex-start; font-size: 14px; padding: 9px 11px; border-radius: var(--radius-klein); background: var(--gold-flaeche); border: 1px solid color-mix(in srgb, var(--gold) 35%, transparent); white-space: pre-wrap; }
-.abschrift svg.i { width: 17px; height: 17px; color: var(--gold); margin-top: 2px; }
-.abschrift.wartet { background: transparent; border-style: dashed; border-color: var(--linie); color: var(--text-leise); font-size: 13px; }
+.abschrift-text { margin: 0; font-size: 14px; color: var(--text-leise); white-space: pre-wrap; }
 
-/* Notizen in Listen und im Bautagebuch */
-.notiz-karte { display: grid; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--linie); min-width: 0; }
+/* Notizen in Listen und im Bautagebuch – antippen öffnet sie */
+.notiz-karte { display: grid; gap: 8px; padding: 12px 4px; border-bottom: 1px solid var(--linie); min-width: 0; cursor: pointer; border-radius: 6px; }
 .notiz-karte:last-child { border-bottom: 0; }
-.notiz-karte.blass { opacity: .62; }
-.nk-kopf { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-leise); min-width: 0; }
-.nk-kopf > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nk-kopf .pille { margin-left: auto; }
-.notiz-karte p { margin: 0; white-space: pre-wrap; font-size: 14.5px; overflow-wrap: anywhere; }
-.notiz-karte .fotos .foto { width: 64px; height: 64px; }
-.notiz-karte .knopfreihe { gap: 4px 6px; }
-.notiz-karte .knopf.leise { min-height: 34px; padding: 0 6px; font-size: 13.5px; gap: 6px; }
-.notiz-karte .knopf.leise svg.i { width: 16px; height: 16px; }
-.tag-kopf { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); padding-top: 12px; }
-.tag-kopf:first-of-type { padding-top: 0; }
-.baustelle-kopf { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
-.baustelle-kopf .angaben { display: grid; gap: 6px; min-width: 0; }
-.baustelle-kopf .ort { display: flex; gap: 8px; align-items: center; font-size: 14px; min-width: 0; }
-.baustelle-kopf .ort svg.i { width: 17px; height: 17px; color: var(--gold); }
+.notiz-karte:hover { background: color-mix(in srgb, var(--flaeche-hoch) 55%, transparent); }
+.notiz-karte.blass { opacity: .6; }
+.notiz-karte p { margin: 0; white-space: pre-wrap; font-size: 15px; overflow-wrap: anywhere; }
+.notiz-karte .medien { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.notiz-karte .medien audio { flex: 1 1 200px; }
+.notiz-karte .foto { width: 56px; height: 56px; }
+.nk-fuss { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-leise); min-width: 0; }
+.nk-fuss > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nk-fuss .pille { margin-left: auto; }
+.tag-kopf { font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--gold); padding: 12px 4px 0; }
+.tag-kopf:first-child { padding-top: 0; }
 .gruppe-titel { display: flex; align-items: center; gap: 8px; margin: 12px 0 2px; }
+/* Notiz als Zeile (Rechnungseditor, Auswahl) */
+.n-zeile { display: flex; align-items: center; gap: 8px; padding: 10px 2px; border-bottom: 1px solid var(--linie); }
+.n-zeile:last-child { border-bottom: 0; }
+.n-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.n-text span { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.n-text small { font-size: 12px; color: var(--text-leise); }
 
 /* Kategorien */
 .farbwahl { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -388,11 +378,17 @@ audio { width: 100%; height: 40px; display: block; }
 .dialog .knopfreihe { justify-content: flex-end; }
 @media (min-width: 640px) { .blende { align-items: center; padding: 24px; } .dialog { border-radius: 18px; } }
 .waehlliste { display: grid; max-height: 50vh; overflow: auto; }
+.dialog-menue { width: min(420px, 100%); }
+.neu-menue { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.neu-menue button { display: grid; justify-items: center; gap: 10px; padding: 20px 10px; border-radius: var(--radius); border: 1px solid var(--linie); background: var(--grund); color: var(--text); font-weight: 800; font-size: 15px; cursor: pointer; }
+.neu-menue button:hover { border-color: var(--gold); }
+.neu-symbol { width: 48px; height: 48px; border-radius: 50%; background: var(--gold); color: var(--auf-gold); display: grid; place-items: center; }
+.neu-symbol svg.i { width: 24px; height: 24px; stroke-width: 2; }
 
 .toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(92px + env(safe-area-inset-bottom, 0px)); z-index: 70; background: var(--text); color: var(--grund); padding: 11px 16px; border-radius: 12px; font-weight: 600; font-size: 14px; max-width: calc(100% - 32px); box-shadow: var(--schatten); }
 @media (min-width: 900px) { .toast { bottom: 28px; } }
 
-.vorschau-band { display: flex; gap: 10px; align-items: center; font-size: 12.5px; padding: 8px 12px; margin: 12px 0 0; border-radius: var(--radius-klein); background: var(--gold-flaeche); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); }
+.vorschau-band { display: flex; gap: 10px; align-items: center; font-size: 12.5px; padding: 8px 12px; margin: 0; border-radius: var(--radius-klein); background: var(--gold-flaeche); border: 1px solid color-mix(in srgb, var(--gold) 40%, transparent); }
 .vorschau-band strong { color: var(--gold); }
 
 /* ── Das Blatt: Rechnung als Papier (DIN 5008, Form B) ──────────────────── */
@@ -418,8 +414,6 @@ audio { width: 100%; height: 40px; display: block; }
 .blatt .b-tabelle td { padding: 1.6mm 1.2mm; border-bottom: .3pt solid var(--papier-linie); vertical-align: top; }
 .blatt .b-tabelle .r { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .blatt .b-tabelle .b-nr { color: var(--papier-grau); width: 7mm; }
-.blatt .b-tabelle tr.b-gruppe td { border-bottom: 0; padding: 3mm 1.2mm .6mm; font-weight: 700; color: var(--papier-akzent); }
-.blatt .b-tabelle tr.b-zwischen td { font-weight: 700; font-size: 8.5pt; }
 .blatt .b-tabelle small { display: block; color: var(--papier-grau); font-size: 8pt; margin-top: .6mm; }
 .blatt .b-summen { margin-left: auto; width: 92mm; display: grid; gap: 1.2mm; font-variant-numeric: tabular-nums; margin-top: 1mm; }
 .blatt .b-summen div { display: flex; justify-content: space-between; gap: 4mm; }

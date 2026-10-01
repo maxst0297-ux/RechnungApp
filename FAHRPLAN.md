@@ -47,12 +47,14 @@
 
 **Update: Kategorien, Baustellen, Notizen mit Diktat (zweite Version)**
 - **Leistungs-Kategorien:** eigene Kategorien mit Farbe und Reihenfolge (Vorschlag zum Start: Arbeitszeit, Material,
-  Anfahrt & Fahrtkosten, Wartung & Kundendienst, Sonstiges). Katalog danach gruppiert und filterbar. Auf Wunsch
-  gliedert sich die Rechnung nach Kategorien – Überschrift und Zwischensumme je Kategorie, im Editor, im PDF und im
-  Archiv gleich. Einstellbar je Rechnung, Standard in den Einstellungen.
+  Anfahrt & Fahrtkosten, Wartung & Kundendienst, Sonstiges). Nur im Katalog der App – gruppiert und filterbar, auch
+  bei „Aus Katalog" in der Rechnung –, damit man Leistungen schnell findet. Die Rechnung selbst wird nicht gegliedert
+  (deine Entscheidung).
 - **Baustellen:** Name, Kunde, Adresse, Stand (laufend/abgeschlossen); Nummer `B-0001` vom Laptop. Je Baustelle ein
   Bautagebuch und „Rechnung erstellen" aus allen offenen Notizen.
-- **Notiz** statt „Erfassen": goldener Knopf in der Mitte. Baustelle mit einem Tipp (zuletzt benutzte vorgewählt,
+- **Bedienung, schlicht:** Reiter Übersicht · Baustellen · ⊕ · Rechnungen · Mehr; das goldene ⊕ legt eine Notiz oder
+  eine Rechnung an. Notiz als eigener ruhiger Bildschirm, Notizen als antippbare Karten, weniger Knöpfe und Texte.
+- **Notiz** statt „Erfassen": Baustelle mit einem Tipp (zuletzt benutzte vorgewählt,
   neue direkt anlegbar, Erkennung aus dem Text), Diktat, Fotos, Datum. Notizen sind offen → in Rechnung →
   abgerechnet (oder ohne Rechnung erledigt). Ungespeicherte Notizen übersteht das Schließen der App.
 - **Diktat:** live über die Spracherkennung des Browsers oder als Aufnahme, die der Laptop offline mit whisper.cpp
@@ -102,7 +104,6 @@
 6. Gibt es einen **Steuerberater**, und arbeitet er mit DATEV?
 7. **Kategorien:** Passen die vorgeschlagenen, oder ordnest du lieber nach Gewerk/Bauabschnitt (z. B. Demontage,
    Rohinstallation, Fliesen, Endmontage)? Mit deiner Leistungsliste lege ich sie gleich passend an.
-8. Sollen Rechnungen **standardmäßig nach Kategorien gegliedert** sein – für alle oder nur für Firmen und Behörden?
 
 ---
 

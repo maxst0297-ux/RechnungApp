@@ -1,11 +1,11 @@
 // Tests der gemeinsamen Logik (Browser + Laptop-Server): Rechnen, Rechts-Check, Festschreiben, GiroCode, Vorschläge,
-// Diktat-Hilfen, Gliederung nach Kategorien, Baustellen und Notizen im Abgleich.
+// Diktat-Hilfen, Baustellen und Notizen im Abgleich.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { rundeCent, centAus, mengeAus, euro } from '../public/lib/geld.js';
 import { berechne } from '../public/lib/berechnung.js';
 import { pruefeRechnung } from '../public/lib/pruefung.js';
-import { festschreiben, festeFassung, abschnitte, rechnungsnummer, zaehlerName, zahlstatus } from '../public/lib/festschreiben.js';
+import { festschreiben, festeFassung, rechnungsnummer, zaehlerName, zahlstatus } from '../public/lib/festschreiben.js';
 import { epcText, ibanGueltig, qrMatrix } from '../public/lib/girocode.js';
 import { vorschlaegeAus, vorschlaegeSumme, zahlwoerter } from '../public/lib/vorschlaege.js';
 import { sprachbefehle, anhaengen, wavBlob, wavVerbinden } from '../public/lib/diktat.js';
@@ -196,26 +196,17 @@ test('Vorschläge: Abkürzungen, Ortsangaben, keine Hausnummern/Daten/Beträge a
   assert.equal(b('Tiefgarage nachgesehen').baustelle, null, 'abgeschlossene Baustellen zählen nicht');
 });
 
-test('Gliederung nach Kategorien: Reihenfolge, Abschnitte, Zwischensummen, Blatt', () => {
-  const kategorien = [{ id: 'kM', name: 'Material', position: 20 }, { id: 'kA', name: 'Arbeitszeit', position: 10 }];
-  const r = { ...entwurf, gliedern: true, positionen: [
+test('Rechnung ohne Gliederung: Reihenfolge wie eingegeben, Kategorien spielen keine Rolle', () => {
+  const r = { ...entwurf, positionen: [
     { ...pos('p1', 'Eckventil', 2, 'Stk.', 1490, 'material'), kategorieId: 'kM' },
     { ...pos('p2', 'Arbeitszeit Geselle', 2, 'Std.', 5800, 'arbeit'), kategorieId: 'kA' },
-    pos('p3', 'Entsorgung', 1, 'pauschal', 2500, 'sonstiges'),
-    { ...pos('p4', 'Arbeitszeit Helfer', 1, 'Std.', 3900, 'arbeit'), kategorieId: 'kA' }] };
-  const { fest } = festeFassung({ entwurf: r, firma, kunde: privat, nummer: '', datum: '2026-10-01', kategorien });
-  assert.deepEqual(fest.positionen.map(p => [p.pos, p.bezeichnung, p.gruppe]),
-    [[1, 'Arbeitszeit Geselle', 'Arbeitszeit'], [2, 'Arbeitszeit Helfer', 'Arbeitszeit'], [3, 'Eckventil', 'Material'], [4, 'Entsorgung', 'Weitere Leistungen']]);
-  const a = abschnitte(fest);
-  assert.deepEqual(a.map(x => [x.name, x.nettoCent]), [['Arbeitszeit', 15500], ['Material', 2980], ['Weitere Leistungen', 2500]]);
-  assert.equal(a.reduce((s, x) => s + x.nettoCent, 0), fest.summen.nettoCent);
+    pos('p3', 'Entsorgung', 1, 'pauschal', 2500, 'sonstiges')] };
+  const { fest } = festeFassung({ entwurf: r, firma, kunde: privat, nummer: '', datum: '2026-10-01' });
+  assert.deepEqual(fest.positionen.map(p => [p.pos, p.bezeichnung]), [[1, 'Eckventil'], [2, 'Arbeitszeit Geselle'], [3, 'Entsorgung']]);
+  assert.ok(fest.positionen.every(p => !('gruppe' in p)));
   const html = blattHtml(fest, { entwurf: true });
-  assert.match(html, /<tr class="b-gruppe"><td><\/td><td colspan="5">Arbeitszeit<\/td><\/tr>/);
-  assert.match(html, /Summe Arbeitszeit<\/td><td class="r">155,00 €/);
-  const ohne = festeFassung({ entwurf: { ...r, gliedern: false }, firma, kunde: privat, nummer: '', datum: '2026-10-01', kategorien }).fest;
-  assert.equal(abschnitte(ohne).length, 1, 'ohne Gliederung ein Abschnitt');
-  assert.equal(ohne.positionen[0].bezeichnung, 'Eckventil', 'Reihenfolge wie eingegeben');
-  assert.doesNotMatch(blattHtml(ohne), /b-gruppe|Summe Arbeitszeit/);
+  assert.doesNotMatch(html, /Summe Arbeitszeit|b-gruppe/);
+  assert.ok(html.indexOf('Eckventil') < html.indexOf('Arbeitszeit Geselle'));
 });
 
 /** Speicher im Arbeitsspeicher – gleiche Schnittstelle wie die SQLite-Datenbank am Laptop. */

@@ -128,7 +128,7 @@ export async function freigabenAusfuehren(speicher, { geraet = 'laptop', heute =
     const nummer = rechnungsnummer(firma.nummernFormat, jahr, laufend);
     const vergeben = speicher.alle('rechnungen').some(r => r.nummer === nummer && r.id !== entwurf.id);
     if (vergeben) { ablehnen([`Die Rechnungsnummer ${nummer} ist schon vergeben – bitte Nummernkreis in den Einstellungen prüfen.`]); continue; }
-    const e = festschreiben({ entwurf, firma, kunde, nummer, datum: heute, original, zeitpunkt, kategorien: speicher.alle('kategorien') });
+    const e = festschreiben({ entwurf, firma, kunde, nummer, datum: heute, original, zeitpunkt });
     if (!e.ok) { ablehnen(e.pruefung.fehler.map(f => f.text)); continue; }
     let pdf = null;
     if (pdfErzeugen) {

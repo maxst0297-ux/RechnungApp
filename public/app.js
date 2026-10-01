@@ -1,7 +1,6 @@
 // RechnungApp – Oberfläche für Handy und Laptop (Vanilla-JS ohne Build-Schritt, wie MyDesk).
 // Arbeitet immer mit der Kopie auf dem Gerät (speicher) – der Abgleich mit dem Laptop läuft im Hintergrund.
-// Bereiche: Übersicht · Baustellen (mit Bautagebuch) · Notiz (Text, Diktat, Fotos – direkt einer Baustelle zugeordnet) ·
-// Rechnungen · Kunden · Leistungen (nach Kategorien) · Einstellungen.
+// Handy: Reiter Übersicht · Baustellen · ⊕ (Notiz oder Rechnung) · Rechnungen · Mehr. Laptop: Seitenleiste.
 import { euro, centAus, centText, mengeAus, mengeText } from './lib/geld.js';
 import { heuteIso, datumDe, tageZwischen, istIso, zuDate } from './lib/datum.js';
 import { ARTEN, EINHEITEN, STEUERSAETZE, KUNDENTYPEN, berechne, positionNetto } from './lib/berechnung.js';
@@ -20,7 +19,7 @@ const ICONS = {
   bild: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>',
   kunden: '<circle cx="9" cy="8" r="3.5"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2c1.9.9 3 3 3 5.8"/>',
   leistungen: '<path d="M14.5 6.5a4 4 0 0 0-5.3 5.3L4 17l3 3 5.2-5.2a4 4 0 0 0 5.3-5.3l-2.4 2.4-2.6-.6-.6-2.6z"/>',
-  baustelle: '<path d="M3 18h18"/><path d="M5 18v-2a7 7 0 0 1 14 0v2"/><path d="M10 9.4V6h4v3.4"/>',
+  baustelle: '<path d="M10 3.5h4l4.6 15.5H5.4z"/><path d="M8.1 10h7.8M6.8 14.5h10.4"/><path d="M3.5 19h17"/>',
   kategorie: '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5"/>',
   einstellungen: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
   mehr: '<circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/>',
@@ -39,7 +38,6 @@ const ICONS = {
   mikro: '<rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
   stopp: '<rect x="7" y="7" width="10" height="10" rx="1.5"/>',
   welle: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
-  ort: '<path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/>',
   kalender: '<rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 10h16M9 3v4M15 3v4"/>',
   laptop: '<rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/>',
   druck: '<path d="M7 9V3h10v6"/><rect x="4" y="9" width="16" height="8" rx="1.5"/><path d="M7 14h10v7H7z"/>',
@@ -64,8 +62,8 @@ const STATUS_TEXT = { entwurf: 'Entwurf', freigabe: 'Wartet auf Laptop', offen: 
 const NOTIZ_STATUS = { offen: ['Offen', 'offen'], zugeordnet: ['In Rechnung', 'freigabe'], abgerechnet: ['Abgerechnet', 'bezahlt'], erledigt: ['Erledigt', 'entwurf'] };
 const HINWEIS_KURZ = { '35a': 'Arbeitskosten nach § 35a EStG ausgewiesen', aufbewahrung: 'Aufbewahrungshinweis für Privatkunden (§ 14b UStG)', verzug: 'Verzugshinweis (§ 286 Abs. 3 BGB)',
   '13b': '§ 13b: Steuerschuldnerschaft des Leistungsempfängers', ist: 'Hinweis Ist-Versteuerung', storno: 'Bezug auf die ursprüngliche Rechnung' };
-const WOCHENTAG = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-const TAG = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+const WOCHENTAG = new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+const UHRZEIT = new Intl.DateTimeFormat('de-DE', { hour: '2-digit', minute: '2-digit' });
 /** Farben für Leistungs-Kategorien (in beiden Designs gut lesbar). */
 export const FARBEN = { gold: '#c9a063', orange: '#e8945a', rot: '#e5735f', lila: '#b08ad8', blau: '#6fa3d8', tuerkis: '#4fb8ad', gruen: '#6cbf8c', grau: '#9b9ba1' };
 const FARBNAMEN = { gold: 'Gold', orange: 'Orange', rot: 'Rot', lila: 'Lila', blau: 'Blau', tuerkis: 'Türkis', gruen: 'Grün', grau: 'Grau' };
@@ -101,13 +99,14 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   const punkt = k => `<span class="punkt" style="--k:${farbeVon(k)}"></span>`;
   const adresse = o => [o?.strasse, [o?.plz, o?.ort].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   const datumKurz = d => { if (!istIso(d)) return ''; const t = tageZwischen(d, heute()); return t === 0 ? 'Heute' : t === 1 ? 'Gestern' : datumDe(d); };
-  const tagText = d => { if (!istIso(d)) return 'Ohne Datum'; const t = tageZwischen(d, heute()); return t === 0 ? 'Heute' : t === 1 ? 'Gestern' : TAG.format(zuDate(d)); };
+  const tagText = d => { if (!istIso(d)) return 'Ohne Datum'; const t = tageZwischen(d, heute()); return t === 0 ? 'Heute' : t === 1 ? 'Gestern' : WOCHENTAG.format(zuDate(d)); };
+  const uhrzeit = iso => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? '' : UHRZEIT.format(d); };
   /** Betreff für Rechnungen einer Baustelle – nennt den Leistungsort, wenn er nicht die Kundenanschrift ist. */
   function bauvorhabenText(b) {
     const adr = adresse(b), k = kunde(b.kundeId);
     return `Bauvorhaben: ${b.name}${adr && adr !== adresse(k) ? ', ' + adr : ''}`;
   }
-  /** Letzte Tätigkeit je Baustelle (Änderung oder neueste Notiz) – sortiert die Auswahl „zuletzt benutzt zuerst". */
+  /** Letzte Tätigkeit je Baustelle (Änderung oder neueste Notiz) – sortiert „zuletzt benutzt zuerst". */
   function aktivitaeten() {
     const m = new Map(baustellen().map(b => [b.id, String(b._geaendert || b.angelegt || '')]));
     for (const n of notizen()) if (m.has(n.baustelleId)) { const z = String(n.angelegt || n._geaendert || ''); if (z > m.get(n.baustelleId)) m.set(n.baustelleId, z); }
@@ -213,6 +212,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       case 'baustelle': return baustelle(Z.id) ? ansichtBaustelle() : ansichtBaustellen();
       case 'baustelleForm': return ansichtBaustelleForm();
       case 'notiz': return ansichtNotiz();
+      case 'notizen': return ansichtNotizen();
       case 'kunden': return ansichtKunden();
       case 'kunde': return ansichtKunde();
       case 'leistungen': return ansichtLeistungen();
@@ -225,29 +225,31 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   }
   function teilErsetzen(sel, html) { const el = wurzel.querySelector(sel); if (el) el.innerHTML = html; }
 
-  const NAV = [['start', 'start', 'Übersicht'], ['baustellen', 'baustelle', 'Baustellen'], ['notiz', 'notiz', 'Notizen'], ['rechnungen', 'rechnung', 'Rechnungen'],
-    ['kunden', 'kunden', 'Kunden'], ['leistungen', 'leistungen', 'Leistungen'], ['einstellungen', 'einstellungen', 'Einstellungen']];
-  const OBER = { rechnung: 'rechnungen', kunde: 'kunden', leistung: 'leistungen', kategorien: 'leistungen', baustelle: 'baustellen', baustelleForm: 'baustellen' };
+  const NAV = [['start', 'start', 'Übersicht'], ['baustellen', 'baustelle', 'Baustellen'], ['rechnungen', 'rechnung', 'Rechnungen'], null,
+    ['notizen', 'notiz', 'Notizen'], ['kunden', 'kunden', 'Kunden'], ['leistungen', 'leistungen', 'Leistungen'], ['einstellungen', 'einstellungen', 'Einstellungen']];
+  const OBER = { rechnung: 'rechnungen', kunde: 'kunden', leistung: 'leistungen', kategorien: 'leistungen', baustelle: 'baustellen', baustelleForm: 'baustellen', notiz: 'notizen' };
   const aktivNav = () => OBER[Z.ansicht] || Z.ansicht;
-  const aktivTab = () => { const a = aktivNav(); return ['kunden', 'leistungen', 'einstellungen', 'mehr'].includes(a) ? 'mehr' : a; };
+  const aktivTab = () => { const a = Z.ansicht === 'notiz' ? 'baustellen' : aktivNav(); return ['notizen', 'kunden', 'leistungen', 'einstellungen', 'mehr'].includes(a) ? 'mehr' : a; };
   function seitenleiste() {
     const offen = notizen().filter(istOffen).length;
     return `<nav class="seitenleiste" aria-label="Hauptmenü">
       <div class="marke"><span class="marke-zeichen">${ic('rechnung')}</span><div><strong>RechnungApp</strong><small>${esc(firma().name || 'Rechnungen fürs Handwerk')}</small></div></div>
-      ${NAV.map(([a, i, t]) => `<button class="nav ${aktivNav() === a ? 'aktiv' : ''}" data-act="tab" data-ansicht="${a}">${ic(i)}<span>${t}</span>${a === 'notiz' && offen ? `<span class="zaehler" title="Offene Notizen">${offen}</span>` : ''}</button>`).join('')}
-      <div class="fuss">${abgleichChip()}<button class="knopf voll" data-act="neueRechnung">${ic('plus')} Neue Rechnung</button></div>
+      <button class="knopf voll neu-knopf" data-act="neuMenue">${ic('plus')} Neu</button>
+      ${NAV.map(e => e ? `<button class="nav ${aktivNav() === e[0] ? 'aktiv' : ''}" data-act="tab" data-ansicht="${e[0]}">${ic(e[1])}<span>${e[2]}</span>${e[0] === 'notizen' && offen ? `<span class="zaehler" title="Offene Notizen">${offen}</span>` : ''}</button>` : '<hr class="nav-trenner">').join('')}
+      <div class="fuss">${abgleichChip()}</div>
     </nav>`;
   }
   function tabLeiste() {
     const t = (a, i, text) => `<button class="tab ${aktivTab() === a ? 'aktiv' : ''}" data-act="tab" data-ansicht="${a}">${ic(i)}<span>${text}</span></button>`;
     return `<nav class="tabs" aria-label="Hauptmenü">${t('start', 'start', 'Übersicht')}${t('baustellen', 'baustelle', 'Baustellen')}
-      <button class="tab mitte ${aktivTab() === 'notiz' ? 'aktiv' : ''}" data-act="tab" data-ansicht="notiz"><span class="kreis">${ic('mikro')}</span><span>Notiz</span></button>
+      <button class="tab mitte" data-act="neuMenue" aria-label="Hinzufügen: Notiz oder Rechnung"><span class="kreis">${ic('plus')}</span></button>
       ${t('rechnungen', 'rechnung', 'Rechnungen')}${t('mehr', 'mehr', 'Mehr')}</nav>`;
   }
   function kopf({ titel, unter = '', zurueckKnopf = false, rechts = '' }) {
     return `<header class="kopf">${zurueckKnopf ? `<button class="rund" data-act="zurueck" aria-label="Zurück">${ic('zurueck')}</button>` : ''}
       <div class="titelblock"><h1>${esc(titel)}</h1>${unter ? `<span class="unterzeile">${esc(unter)}</span>` : ''}</div>${rechts}</header>`;
   }
+  const rundKnopf = (act, icon, label, extra = '') => `<button class="rund" data-act="${act}" aria-label="${esc(label)}" title="${esc(label)}" ${extra}>${ic(icon)}</button>`;
   function abgleichChip() {
     const a = Z.abgleich, n = a.wartend ? ' · ' + a.wartend : '';
     let klasse, lang, kurz;
@@ -261,10 +263,15 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     }
     return `<button class="abgleich ${klasse}" data-act="abgleichDialog" data-chip title="Abgleich mit dem Laptop"><span class="punkt-status"></span><span class="lang">${esc(lang)}</span><span class="kurz">${esc(kurz)}</span></button>`;
   }
-  function abgleichChipsAktualisieren() { for (const el of wurzel.querySelectorAll('[data-chip]')) el.outerHTML = abgleichChip(); if (Z.dialog?.art === 'abgleich') teilErsetzen('.dialog', dialogInhalt()); }
-
+  /** Platz für den Abgleich-Hinweis in Kopfzeilen – sichtbar nur, solange der Laptop nicht erreichbar ist. */
+  const statusOrt = () => `<span class="status-ort" data-chip-ort>${Z.abgleich.verbunden === false ? abgleichChip() : ''}</span>`;
+  function abgleichChipsAktualisieren() {
+    for (const el of wurzel.querySelectorAll('[data-chip-ort]')) el.innerHTML = Z.abgleich.verbunden === false ? abgleichChip() : '';
+    for (const el of wurzel.querySelectorAll('[data-chip]')) el.outerHTML = abgleichChip();
+    if (Z.dialog?.art === 'abgleich') teilErsetzen('.dialog', dialogInhalt());
+  }
   const vorschauBand = () => (modus === 'vorschau'
-    ? `<div class="vorschau-band">${ic('auge')}<span><strong>Vorschau</strong> mit Beispieldaten – alles bleibt auf diesem Gerät. Der „Laptop" wird im Browser nachgebildet.</span></div>` : '');
+    ? `<div class="vorschau-band">${ic('auge')}<span><strong>Vorschau</strong> mit Beispieldaten – der Laptop wird im Browser nachgebildet.</span></div>` : '');
 
   // ── Übersicht ──
   function ansichtStart() {
@@ -277,30 +284,24 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const zahlen = notizZahlen();
     const bereit = baustellenSortiert(false).filter(b => zahlen.get(b.id)?.offen);
     const ohne = notizen().filter(n => !n.baustelleId && istOffen(n)).length;
-    const zuletzt = rs.slice().sort((a, b) => String(b._geaendert).localeCompare(String(a._geaendert))).slice(0, 6);
+    const zuletzt = rs.slice().sort((a, b) => String(b._geaendert).localeCompare(String(a._geaendert))).slice(0, 5);
     const f = firma();
     const fehltFirma = !f.name || !(f.steuernummer || f.ustId) || !f.strasse;
+    const zeile = (act, id, titel, neben, zahl) => `<button class="zeile" data-act="${act}" ${id ? `data-id="${id}"` : ''}><span class="haupt">${esc(titel)}</span>
+      <span class="rechts"><span class="zahl-badge">${zahl}</span></span><span class="neben">${esc(neben)}</span><span></span></button>`;
     return kopf({ titel: 'Übersicht', unter: WOCHENTAG.format(new Date()), rechts: `<span class="nur-handy">${abgleichChip()}</span>` }) + `
       <div class="stapel">${vorschauBand()}
-        ${fehltFirma ? `<div class="box gold">${ic('stift')}<div><strong>Zuerst deine Firmendaten eintragen.</strong><br>Name, Anschrift und Steuernummer stehen auf jeder Rechnung.<div class="knopfreihe"><button class="knopf" data-act="tab" data-ansicht="einstellungen">Firmendaten eintragen</button></div></div></div>` : ''}
+        ${fehltFirma ? `<div class="box gold">${ic('stift')}<div><strong>Zuerst deine Firmendaten eintragen.</strong><div class="knopfreihe"><button class="knopf" data-act="tab" data-ansicht="einstellungen">Firmendaten</button></div></div></div>` : ''}
         <div class="kennzahlen">
           <button class="kennzahl" data-act="rechnungenFilter" data-wert="offen"><span class="etikett">Offen</span><strong>${euro(summe(offen))}</strong><span class="sub">${mehrzahl(offen.length, 'Rechnung', 'Rechnungen')}</span></button>
           <button class="kennzahl ${ueber.length ? 'warn' : ''}" data-act="rechnungenFilter" data-wert="ueberfaellig"><span class="etikett">Überfällig</span><strong>${euro(summe(ueber))}</strong><span class="sub">${mehrzahl(ueber.length, 'Rechnung', 'Rechnungen')}</span></button>
           <button class="kennzahl" data-act="rechnungenFilter" data-wert="entwurf"><span class="etikett">Entwürfe</span><strong>${entwuerfe.length}</strong><span class="sub">ohne Nummer</span></button>
         </div>
-        <div class="aktionen-gross">
-          <button class="aktion haupt" data-act="tab" data-ansicht="notiz"><span class="marke-zeichen">${ic('mikro')}</span>Notiz</button>
-          <button class="aktion" data-act="neueRechnung"><span class="marke-zeichen">${ic('plus')}</span>Neue Rechnung</button>
-          <button class="aktion" data-act="neueBaustelle"><span class="marke-zeichen">${ic('baustelle')}</span>Neue Baustelle</button>
-        </div>
-        ${bereit.length || ohne ? `<section class="karte"><h2>${ic('notiz')} Offene Notizen<span class="leise klein rechts">bereit für die Rechnung</span></h2><div class="liste">
-          ${bereit.slice(0, 6).map(b => `<div class="zeile2"><button data-act="baustelleOeffnen" data-id="${b.id}"><span class="haupt">${esc(b.name)}</span>
-              <span class="neben">${esc(kunde(b.kundeId)?.name || 'ohne Kunde')} · ${mehrzahl(zahlen.get(b.id).offen, 'offene Notiz', 'offene Notizen')}</span></button>
-            <button class="knopf zweit klein" data-act="rechnungAusBaustelle" data-id="${b.id}">${ic('rechnung')} Rechnung</button></div>`).join('')}
-          ${ohne ? `<div class="zeile2"><button data-act="notizenOhneBaustelle"><span class="haupt">${mehrzahl(ohne, 'Notiz', 'Notizen')} ohne Baustelle</span><span class="neben">Einer Baustelle zuordnen, dann landen sie in der richtigen Rechnung</span></button>
-            <button class="knopf leise klein" data-act="notizenOhneBaustelle">Zuordnen</button></div>` : ''}
+        ${bereit.length || ohne ? `<section class="karte"><h2>Offene Notizen</h2><div class="liste">
+          ${bereit.slice(0, 6).map(b => zeile('baustelleOeffnen', b.id, b.name, kunde(b.kundeId)?.name || 'ohne Kunde', zahlen.get(b.id).offen)).join('')}
+          ${ohne ? zeile('notizenOhneBaustelle', '', 'Ohne Baustelle', 'noch zuordnen', ohne) : ''}
         </div></section>` : ''}
-        <section class="karte"><h2>Zuletzt bearbeitet<button class="knopf leise rechts" data-act="tab" data-ansicht="rechnungen">Alle Rechnungen</button></h2>
+        <section class="karte"><h2>Zuletzt<button class="knopf leise rechts" data-act="tab" data-ansicht="rechnungen">Alle</button></h2>
           <div class="liste">${zuletzt.length ? zuletzt.map(rechnungZeile).join('') : '<div class="leer">Noch keine Rechnungen.</div>'}</div></section>
       </div>`;
   }
@@ -314,9 +315,9 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const betrag = r.fest ? r.fest.summen.bruttoCent : entwurfSummen(r).bruttoCent;
     const b = baustelle(r.baustelleId);
     let neben;
-    if (r.status === 'entwurf') neben = `Entwurf · ${mehrzahl((r.positionen || []).filter(p => p.aktiv !== false).length, 'Position', 'Positionen')}`;
-    else if (st === 'ueberfaellig') neben = `${datumDe(r.datum)} · seit ${tageZwischen(r.faellig, heute())} Tagen fällig`;
-    else if (st === 'offen') neben = `${datumDe(r.datum)} · fällig ${datumDe(r.faellig)}`;
+    if (r.status === 'entwurf') neben = mehrzahl((r.positionen || []).filter(p => p.aktiv !== false).length, 'Position', 'Positionen');
+    else if (st === 'ueberfaellig') neben = `seit ${tageZwischen(r.faellig, heute())} Tagen fällig`;
+    else if (st === 'offen') neben = `fällig ${datumDe(r.faellig)}`;
     else neben = datumDe(r.datum);
     return `<button class="zeile" data-act="oeffneRechnung" data-id="${r.id}">
       <span class="haupt">${r.nummer ? esc(r.nummer) + ' · ' : ''}${esc(name)}</span><span class="rechts">${euro(betrag)}</span>
@@ -330,7 +331,6 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       if (Z.filterR === 'offen' && !['offen', 'ueberfaellig'].includes(st)) return false;
       if (Z.filterR === 'ueberfaellig' && st !== 'ueberfaellig') return false;
       if (Z.filterR === 'bezahlt' && st !== 'bezahlt') return false;
-      if (Z.filterR === 'storniert' && !['storniert', 'storno'].includes(st)) return false;
       if (!q) return true;
       const name = r.fest?.kunde?.name || kunde(r.kundeId)?.name || '';
       return [name, r.nummer, r.betreff, baustelle(r.baustelleId)?.name].join(' ').toLowerCase().includes(q);
@@ -339,11 +339,11 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   }
   const rechnungsListeHtml = () => { const l = rechnungenGefiltert(); return l.length ? l.map(rechnungZeile).join('') : '<div class="leer">Keine passenden Rechnungen.</div>'; };
   function ansichtRechnungen() {
-    const f = [['alle', 'Alle'], ['entwurf', 'Entwürfe'], ['offen', 'Offen'], ['ueberfaellig', 'Überfällig'], ['bezahlt', 'Bezahlt'], ['storniert', 'Storniert']];
-    return kopf({ titel: 'Rechnungen', rechts: `<button class="knopf" data-act="neueRechnung">${ic('plus')} Neu</button>` }) + `
-      <div class="stapel">${vorschauBand()}
+    const f = [['alle', 'Alle'], ['entwurf', 'Entwürfe'], ['offen', 'Offen'], ['ueberfaellig', 'Überfällig'], ['bezahlt', 'Bezahlt']];
+    return kopf({ titel: 'Rechnungen', rechts: statusOrt() }) + `
+      <div class="stapel">
         <div class="filter" role="tablist">${f.map(([w, t]) => `<button class="chip ${Z.filterR === w ? 'an' : ''}" data-act="rechnungenFilter" data-wert="${w}">${t}</button>`).join('')}</div>
-        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-r" type="search" data-suche="R" value="${esc(Z.sucheR)}" placeholder="Kunde, Nummer, Baustelle oder Betreff"></label>
+        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-r" type="search" data-suche="R" value="${esc(Z.sucheR)}" placeholder="Suchen"></label>
         <section class="karte"><div class="liste" id="liste-r">${rechnungsListeHtml()}</div></section>
       </div>`;
   }
@@ -352,7 +352,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   function neueRechnung(kundeId = null, extra = {}) {
     const f = firma(), k = kunde(kundeId);
     const r = { id: neueId('r'), typ: 'rechnung', status: 'entwurf', kundeId, baustelleId: null, leistungVon: heute(), leistungBis: '', amGrundstueck: !k || k.typ === 'privat', betreff: '',
-      einleitung: f.einleitung || STANDARD_EINLEITUNG, schluss: f.schluss || 'Mit freundlichen Grüßen', zahlungszielTage: null, gliedern: !!f.gliedern, positionen: [], notizen: [],
+      einleitung: f.einleitung || STANDARD_EINLEITUNG, schluss: f.schluss || 'Mit freundlichen Grüßen', zahlungszielTage: null, positionen: [], notizen: [],
       angelegt: new Date().toISOString(), ...extra };
     if (k && !extra.positionen) standardDazu(r, k);
     verlassen();
@@ -362,7 +362,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     render(); window.scrollTo(0, 0);
   }
   const posAusLeistung = (l, menge = 1, extra = {}) => ({ id: neueId('p'), leistungId: l.id, bezeichnung: l.bezeichnung, beschreibung: l.beschreibung || '', menge, einheit: l.einheit,
-    preisCent: l.preisCent ?? null, steuersatz: l.steuersatz ?? 19, art: l.art || 'sonstiges', kategorieId: l.kategorieId || null, aktiv: true, ...extra });
+    preisCent: l.preisCent ?? null, steuersatz: l.steuersatz ?? 19, art: l.art || 'sonstiges', aktiv: true, ...extra });
   function standardDazu(r, k) {
     for (const s of k?.standard || []) { const l = leistung(s.leistungId); if (l && !r.positionen.some(p => p.leistungId === l.id)) r.positionen.push(posAusLeistung(l, s.menge || 1)); }
   }
@@ -390,13 +390,12 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const p = pruefeRechnung({ firma: f, kunde: k, rechnung: r, datum: heute(), original: originalVon(r) });
     const wartet = !!r.freigabe;
     const titel = r.typ === 'storno' ? 'Stornorechnung' : 'Rechnung';
-    return kopf({ titel, unter: k ? k.name : 'Entwurf – noch ohne Nummer', zurueckKnopf: true, rechts: abgleichChip() }) + `
-      ${vorschauBand()}
+    return kopf({ titel, unter: k ? k.name : 'Entwurf', zurueckKnopf: true, rechts: statusOrt() }) + `
       ${freigabeBanner(r)}
-      <div class="nur-schmal" style="margin:12px 0"><div class="segment voll" role="tablist">
+      <div class="nur-schmal" style="margin:4px 0 12px"><div class="segment voll" role="tablist">
         <button class="${Z.editorTab === 'bearbeiten' ? 'an' : ''}" data-act="editorTab" data-tab="bearbeiten">Bearbeiten</button>
         <button class="${Z.editorTab === 'vorschau' ? 'an' : ''}" data-act="editorTab" data-tab="vorschau">Vorschau</button></div></div>
-      <div class="editor ${Z.editorTab === 'vorschau' ? 'zeige-blatt' : ''}" style="margin-top:12px">
+      <div class="editor ${Z.editorTab === 'vorschau' ? 'zeige-blatt' : ''}">
         <fieldset class="form-spalte" style="border:0;margin:0;padding:0;min-width:0" ${wartet ? 'disabled' : ''}>
           ${karteKunde(r, k)}${karteLeistung(r, k)}${kartePositionen(r)}${karteNotizen(r)}${karteTexte(r, k, f)}
           <section class="karte" id="pruefung">${pruefungHtml(p, k)}</section>
@@ -412,7 +411,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   }
   const originalVon = r => (r.typ === 'storno' && r.stornoVon ? speicher.holen('rechnungen', r.stornoVon) : null);
   function freigabeBanner(r) {
-    if (r.freigabe) return `<div class="box ocker">${ic('laptop')}<div><strong>Freigegeben – wartet auf den Laptop.</strong><br>Sobald der Laptop erreichbar ist, prüft er die Rechnung, vergibt die Nummer und legt das PDF ab.
+    if (r.freigabe) return `<div class="box ocker">${ic('laptop')}<div><strong>Freigegeben – wartet auf den Laptop.</strong><br>Sobald der Laptop erreichbar ist, vergibt er die Nummer und legt das PDF ab.
       <div class="knopfreihe"><button class="knopf zweit" data-act="abgleichJetzt">${ic('abgleich')} Jetzt abgleichen</button><button class="knopf leise" data-act="freigabeZuruecknehmen">Freigabe zurücknehmen</button></div></div></div>`;
     if (r.freigabeFehler?.length) return `<div class="box rot">${ic('fehler')}<div><strong>Der Laptop hat die Freigabe abgelehnt:</strong><br>${r.freigabeFehler.map(esc).join('<br>')}</div></div>`;
     return '';
@@ -425,45 +424,41 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       <div class="kunde-kurz"><div><strong>${esc(k.name)}</strong><div class="neben">${esc(adresse(k))}${k.nummer ? ' · ' + esc(k.nummer) : ''}</div></div>
         <span class="pille typ">${KUNDENTYPEN[k.typ] || ''}${k.bauleistender13b ? ' · § 13b' : ''}</span></div>
       ${baustelleImEditor(r, b, k)}
-      ${fehlend.length ? `<div class="knopfreihe" style="margin-top:10px"><button class="chip dazu" data-act="standardUebernehmen">Wiederkehrende Positionen von ${esc(k.name)} (${fehlend.length})</button></div>` : ''}
+      ${fehlend.length ? `<div class="knopfreihe" style="margin-top:10px"><button class="chip dazu" data-act="standardUebernehmen">Wiederkehrende Positionen (${fehlend.length})</button></div>` : ''}
     </section>`;
   }
   function baustelleImEditor(r, b, k) {
-    if (b) return `<div class="im-editor">${ic('baustelle')}<div><span class="leise klein">Baustelle</span><br><strong>${esc(b.name)}</strong>${adresse(b) ? `<span class="leise klein"> · ${esc(adresse(b))}</span>` : ''}</div>
+    if (b) return `<div class="im-editor">${ic('baustelle')}<div><strong>${esc(b.name)}</strong>${adresse(b) ? `<span class="leise klein"> · ${esc(adresse(b))}</span>` : ''}</div>
       <button class="knopf leise" data-act="entwurfBaustelleLoesen">Lösen</button></div>`;
     const moegliche = k ? baustellenSortiert(true).filter(x => x.kundeId === k.id) : [];
     if (!moegliche.length) return '';
-    return `<div class="im-editor">${ic('baustelle')}<div class="filter wrap"><span class="leise klein">Baustelle zuordnen:</span>${moegliche.slice(0, 5).map(x => `<button class="chip dazu" data-act="entwurfBaustelle" data-id="${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`;
+    return `<div class="im-editor">${ic('baustelle')}<div class="filter wrap">${moegliche.slice(0, 5).map(x => `<button class="chip dazu" data-act="entwurfBaustelle" data-id="${x.id}">${esc(x.name)}</button>`).join('')}</div></div>`;
   }
   function karteLeistung(r, k) {
     return `<section class="karte"><h2>Leistung</h2><div class="felder">
       <label class="feld"><span>Leistung am / ab</span><input type="date" id="e-von" data-e="leistungVon" value="${esc(r.leistungVon || '')}" class="${istIso(r.leistungVon) ? '' : 'fehlt'}"></label>
       <label class="feld"><span>bis (bei Zeitraum)</span><input type="date" id="e-bis" data-e="leistungBis" value="${esc(r.leistungBis || '')}"></label>
-      <label class="feld ganz"><span>Betreff / Bauvorhaben (optional)</span><input id="e-betreff" data-e="betreff" value="${esc(r.betreff || '')}" placeholder="z. B. Badsanierung EG, Gartenweg 5"></label>
+      <label class="feld ganz"><span>Betreff (optional)</span><input id="e-betreff" data-e="betreff" value="${esc(r.betreff || '')}" placeholder="z. B. Badsanierung EG"></label>
       ${k?.typ === 'privat' ? `<label class="schalter ganz"><input type="checkbox" id="e-grund" data-e="amGrundstueck" ${r.amGrundstueck !== false ? 'checked' : ''}>
-        <span>Arbeiten an Haus, Wohnung oder Grundstück<br><small class="leise">Dann kommen der Ausweis der Arbeitskosten (§ 35a EStG) und der Aufbewahrungshinweis auf die Rechnung.</small></span></label>` : ''}
+        <span>Arbeiten an Haus, Wohnung oder Grundstück <small class="leise">(§ 35a EStG)</small></span></label>` : ''}
     </div></section>`;
   }
   function kartePositionen(r) {
-    const ks = kategorien();
     const favs = leistungen().filter(l => l.favorit && !r.positionen.some(p => p.leistungId === l.id)).slice(0, 8);
     const aktiv = r.positionen.filter(p => p.aktiv !== false).length;
     return `<section class="karte"><h2>Positionen<span class="leise klein rechts" id="pos-zaehler">${aktiv} von ${r.positionen.length} angehakt</span></h2>
-      <div class="positionen">${r.positionen.length ? r.positionen.map(p => posHtml(p, ks)).join('') : '<div class="leer">Noch keine Positionen – unten aus dem Katalog wählen oder frei eintragen.</div>'}</div>
-      ${favs.length ? `<div style="margin-top:12px"><div class="etikett" style="margin-bottom:6px">Häufig</div><div class="filter wrap">${favs.map(l => `<button class="chip dazu" data-act="leistungDazu" data-id="${l.id}">${esc(l.bezeichnung)}</button>`).join('')}</div></div>` : ''}
+      <div class="positionen">${r.positionen.length ? r.positionen.map(posHtml).join('') : '<div class="leer">Noch keine Positionen.</div>'}</div>
+      ${favs.length ? `<div class="filter wrap" style="margin-top:12px">${favs.map(l => `<button class="chip dazu" data-act="leistungDazu" data-id="${l.id}">${esc(l.bezeichnung)}</button>`).join('')}</div>` : ''}
       <div class="knopfreihe" style="margin-top:12px">
         <button class="knopf zweit" data-act="katalogOeffnen">${ic('leistungen')} Aus Katalog</button>
-        <button class="knopf zweit" data-act="freiePosition">${ic('stift')} Freie Position</button>
+        <button class="knopf zweit" data-act="freiePosition">${ic('stift')} Frei</button>
       </div>
-      ${ks.length ? `<label class="schalter" style="margin-top:14px"><input type="checkbox" id="e-gliedern" data-e="gliedern" ${r.gliedern ? 'checked' : ''}>
-        <span>Auf der Rechnung nach Kategorien gliedern<br><small class="leise">Überschrift und Zwischensumme je Kategorie – in der Reihenfolge unter Leistungen → Kategorien.</small></span></label>` : ''}
     </section>`;
   }
-  function posHtml(p, ks) {
-    const k = ks.find(x => x.id === p.kategorieId);
+  function posHtml(p) {
     const offen = p.beschreibung || Z.beschreibungOffen.has(p.id);
     const opt = (liste, wert) => liste.map(([w, t]) => `<option value="${esc(w)}" ${String(w) === String(wert) ? 'selected' : ''}>${esc(t)}</option>`).join('');
-    return `<div class="pos ${p.aktiv === false ? 'aus' : ''} ${k ? 'mit-kat' : ''}" data-pos="${p.id}" ${k ? `style="--k:${farbeVon(k)}"` : ''}>
+    return `<div class="pos ${p.aktiv === false ? 'aus' : ''}" data-pos="${p.id}">
       <div class="oben"><input type="checkbox" id="p-${p.id}-aktiv" data-p="aktiv" ${p.aktiv !== false ? 'checked' : ''} aria-label="Auf die Rechnung">
         <input id="p-${p.id}-bez" data-p="bezeichnung" value="${esc(p.bezeichnung)}" placeholder="Bezeichnung, z. B. Arbeitszeit Geselle" aria-label="Bezeichnung" class="${String(p.bezeichnung || '').trim().length < 2 ? 'fehlt' : ''}">
         <button class="loeschen" data-act="posLoeschen" data-id="${p.id}" aria-label="Position entfernen">${ic('muell')}</button></div>
@@ -474,11 +469,10 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
         <label class="feld"><span>USt</span><select id="p-${p.id}-satz" data-p="steuersatz">${opt(STEUERSAETZE.map(s => [s, s + ' %']), p.steuersatz ?? 19)}</select></label>
         <div class="betrag" data-betrag="${p.id}">${euro(positionNetto(p))}</div>
       </div>
-      <div class="unten"><span class="knopfreihe"><label class="art">Art <select id="p-${p.id}-art" data-p="art">${opt(Object.entries(ARTEN), p.art || 'sonstiges')}</select></label>
-        ${ks.length ? `<label class="art">Kategorie <select id="p-${p.id}-kat" data-p="kategorieId"><option value="">–</option>${opt(ks.map(x => [x.id, x.name]), p.kategorieId || '')}</select></label>` : ''}</span>
+      <div class="unten"><label class="art">Art <select id="p-${p.id}-art" data-p="art">${opt(Object.entries(ARTEN), p.art || 'sonstiges')}</select></label>
         <span class="knopfreihe">${!p.leistungId && String(p.bezeichnung || '').trim().length > 2 && p.preisCent != null ? `<button class="knopf leise" data-act="posInKatalog" data-id="${p.id}">${ic('stern')} In Katalog</button>` : ''}
         ${offen ? '' : `<button class="knopf leise" data-act="beschreibungZeigen" data-id="${p.id}">+ Beschreibung</button>`}</span></div>
-      ${offen ? `<textarea id="p-${p.id}-besch" data-p="beschreibung" placeholder="Beschreibung (optional), z. B. was genau gemacht wurde">${esc(p.beschreibung || '')}</textarea>` : ''}
+      ${offen ? `<textarea id="p-${p.id}-besch" data-p="beschreibung" placeholder="Beschreibung (optional)">${esc(p.beschreibung || '')}</textarea>` : ''}
     </div>`;
   }
   /** Offene Notizen, die zu diesem Entwurf passen: gleiche Baustelle – sonst gleicher Kunde oder noch ganz ohne Zuordnung. */
@@ -491,12 +485,23 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const ns = (r.notizen || []).map(id => speicher.holen('notizen', id)).filter(Boolean).sort(neuesteZuerst);
     const weitere = passendeOffeneNotizen(r).length;
     if (!ns.length && !weitere) return '';
-    return `<section class="karte"><h2>${ic('notiz')} Notizen zur Rechnung${weitere ? `<button class="knopf leise rechts" data-act="notizenWahl">${ic('plus')} ${ns.length ? 'Weitere' : 'Offene Notizen'} (${weitere})</button>` : ''}</h2>
-      ${ns.length ? ns.map(n => notizKarte(n, { art: 'editor' })).join('') : '<p class="leise klein" style="margin:0">Es gibt offene Notizen zu diesem Kunden bzw. dieser Baustelle – übernehmen, dann werden Leistungen und Mengen daraus vorgeschlagen.</p>'}</section>`;
+    return `<section class="karte"><h2>Notizen${weitere ? `<button class="knopf leise rechts" data-act="notizenWahl">${ic('plus')} ${weitere} offen</button>` : ''}</h2>
+      ${ns.length ? `<div class="liste">${ns.map(n => notizZeile(n, 'entwurf')).join('')}</div>` : ''}</section>`;
+  }
+  /** Notiz als kompakte Zeile – im Rechnungseditor und in der Auswahl offener Notizen. */
+  function notizZeile(n, art) {
+    const text = notizText(n).replace(/\s+/g, ' ').trim();
+    const b = baustelle(n.baustelleId);
+    const ohneTreffer = art === 'entwurf' && text && !vorschlaegeAus(notizText(n), leistungen()).positionen.length;
+    return `<div class="n-zeile"><div class="n-text"><span>${esc(text || ((n.fotos || []).length ? 'Foto' : 'Sprachaufnahme'))}</span>
+        <small>${esc([datumKurz(n.datum), art === 'wahl' && b ? b.name : ''].filter(Boolean).join(' · '))}</small></div>
+      ${art === 'wahl' ? `<button class="knopf zweit klein" data-act="notizInEntwurf" data-id="${n.id}">${ic('plus')}</button>`
+        : `${ohneTreffer ? `<button class="knopf leise klein" data-act="notizAlsPosition" data-id="${n.id}">Als Position</button>` : ''}
+           <button class="loeschen" data-act="notizAusEntwurf" data-id="${n.id}" aria-label="Aus der Rechnung nehmen" title="Aus der Rechnung nehmen">${ic('fehler')}</button>`}</div>`;
   }
   function karteTexte(r, k, f) {
     const std = zahlungszielTage({ zahlungszielTage: null }, k, f);
-    return `<details class="karte"><summary style="cursor:pointer"><strong>Texte und Zahlungsziel</strong> <span class="leise klein">· Einleitung, Schluss, Zahlungsziel</span></summary>
+    return `<details class="karte"><summary style="cursor:pointer"><strong>Texte und Zahlungsziel</strong></summary>
       <div class="felder" style="margin-top:12px">
         <label class="feld ganz"><span>Einleitung (nach der Anrede)</span><textarea id="e-einl" data-e="einleitung">${esc(r.einleitung || '')}</textarea></label>
         <label class="feld ganz"><span>Schluss</span><textarea id="e-schluss" data-e="schluss" style="min-height:48px">${esc(r.schluss || '')}</textarea></label>
@@ -512,7 +517,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
         ${p.fehler.map(x => `<li class="f">${ic('fehler')}<span>${esc(x.text)}${link(x.ziel)}</span></li>`).join('')}
         ${p.warnungen.map(x => `<li class="w">${ic('warn')}<span>${esc(x.text)}${link(x.ziel)}</span></li>`).join('')}
         ${offen ? '' : `<li class="h">${ic('haken')}<span>Pflichtangaben nach § 14 Abs. 4 UStG vollständig</span></li>`}
-        ${p.hinweise.map(h => `<li class="h">${ic('haken')}<span>Wird aufgedruckt: ${esc(HINWEIS_KURZ[h.id] || h.text)}</span></li>`).join('')}
+        ${p.hinweise.map(h => `<li class="h">${ic('haken')}<span>${esc(HINWEIS_KURZ[h.id] || h.text)}</span></li>`).join('')}
       </ul>`;
   }
   function summenHtml(p) {
@@ -526,7 +531,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     </div>`;
   }
   function entwurfBlatt(r) {
-    const { fest } = festeFassung({ entwurf: r, firma: firma(), kunde: kunde(r.kundeId), nummer: '', datum: heute(), original: originalVon(r), kategorien: kategorien() });
+    const { fest } = festeFassung({ entwurf: r, firma: firma(), kunde: kunde(r.kundeId), nummer: '', datum: heute(), original: originalVon(r) });
     return blattHtml(fest, { entwurf: true, logo: firma().logo });
   }
   function teilAktualisieren() {
@@ -590,6 +595,11 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     notizenInEntwurf(ns, Z.entwurf);
     Z.entwurfNeu = false; entwurfSofortSpeichern(); render();
   }
+  /** Neue Rechnung für eine Baustelle – gibt es schon einen offenen Entwurf, geht es dorthin. */
+  function rechnungFuerBaustelle(b) {
+    const e = rechnungen().find(r => r.status === 'entwurf' && !r.freigabe && r.baustelleId === b.id);
+    if (e) gehe('rechnung', e.id); else neueRechnung(b.kundeId, { baustelleId: b.id, betreff: bauvorhabenText(b) });
+  }
 
   // ── Rechnung ansehen (festgeschrieben) ──
   function ansichtRechnung(r) {
@@ -599,16 +609,15 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const b = baustelle(r.baustelleId);
     let faelligText = '';
     if (st === 'ueberfaellig') faelligText = `seit ${tageZwischen(r.faellig, h)} Tagen überfällig`;
-    else if (st === 'offen') { const t = tageZwischen(h, r.faellig); faelligText = t === 0 ? 'heute fällig' : `fällig in ${t} Tag${t === 1 ? '' : 'en'}`; }
-    return kopf({ titel: `${r.typ === 'storno' ? 'Storno' : 'Rechnung'} ${r.nummer}`, unter: f.kunde.name, zurueckKnopf: true, rechts: abgleichChip() }) + `${vorschauBand()}
-      <div class="zweispaltig" style="margin-top:12px">
+    else if (st === 'offen') { const t = tageZwischen(h, r.faellig); faelligText = t === 0 ? 'heute fällig' : `in ${t} Tag${t === 1 ? '' : 'en'}`; }
+    return kopf({ titel: `${r.typ === 'storno' ? 'Storno' : 'Rechnung'} ${r.nummer}`, unter: f.kunde.name, zurueckKnopf: true, rechts: statusOrt() }) + `
+      <div class="zweispaltig">
         <div class="stapel">
           <section class="karte"><h2>${pille(st)}<span class="rechts betrag" style="font-size:20px">${euro(s.bruttoCent)}</span></h2>
             <div class="summen">
               <div><span>Rechnungsdatum</span><span>${datumDe(r.datum)}</span></div>
               ${r.typ !== 'storno' ? `<div><span>Fällig am</span><span>${datumDe(r.faellig)}${faelligText ? ' · ' + faelligText : ''}</span></div>` : ''}
               ${b ? `<div><span>Baustelle</span><span><button class="link" data-act="baustelleOeffnen" data-id="${b.id}">${esc(b.name)}</button></span></div>` : ''}
-              ${(r.notizen || []).length ? `<div><span>Grundlage</span><span>${mehrzahl(r.notizen.length, 'Notiz', 'Notizen')}</span></div>` : ''}
               ${gezahlt ? `<div><span>Bezahlt</span><span>${euro(gezahlt)}</span></div>` : ''}
               ${['offen', 'ueberfaellig'].includes(st) ? `<div class="gesamt"><span>Noch offen</span><span>${euro(offenerBetrag(r))}</span></div>` : ''}
               ${storniertDurch ? `<div><span>Storniert durch</span><span>${esc(storniertDurch.nummer || 'Storno (wartet)')}</span></div>` : ''}
@@ -616,21 +625,16 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
             </div>
             ${(r.zahlungen || []).length ? `<div class="liste" style="margin-top:10px">${r.zahlungen.map((z, i) => `<div class="zeile" style="cursor:default"><span class="haupt">${ic('euro')} Zahlung vom ${datumDe(z.datum)}</span><span class="rechts">${euro(z.betragCent)}</span><span class="neben">${esc(z.notiz || 'Überweisung')}</span><span class="rechts"><button class="knopf leise" data-act="zahlungEntfernen" data-i="${i}">Entfernen</button></span></div>`).join('')}</div>` : ''}
           </section>
-          <section class="karte"><h2>Aktionen</h2><div class="knopfreihe">
-            <button class="knopf" data-act="pdfOeffnen">${ic('druck')} PDF öffnen / drucken</button>
-            ${['offen', 'ueberfaellig'].includes(st) ? `<button class="knopf zweit" data-act="zahlungDialog">${ic('euro')} Zahlung erfassen</button>` : ''}
-            <button class="knopf zweit" data-act="mailHinweis">${ic('mail')} Per Mail senden</button>
-            ${r.typ !== 'storno' ? `<button class="knopf zweit" data-act="wieDiese">${ic('kopie')} Als neue Rechnung kopieren</button>` : ''}
-            ${['offen', 'ueberfaellig', 'bezahlt'].includes(st) && r.typ !== 'storno' && !r.storniertDurch ? `<button class="knopf gefahr" data-act="stornoFragen">${ic('storno')} Stornieren</button>` : ''}
-          </div></section>
-          <section class="karte"><h2>${ic('schloss')} Unveränderbar abgelegt</h2>
-            <div class="summen klein">
-              <div><span>Festgeschrieben</span><span>${r.festgeschriebenAm ? new Date(r.festgeschriebenAm).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : '–'}</span></div>
-              <div><span>Archivdatei</span><span style="overflow-wrap:anywhere;text-align:right">${esc(r.pdf?.datei || (modus === 'vorschau' ? 'im Vorschau-Modus ohne PDF' : '–'))}</span></div>
-              ${r.pdf?.sha256 ? `<div><span>Prüfsumme (SHA-256)</span><span class="zahl">${esc(r.pdf.sha256.slice(0, 16))}…</span></div>` : ''}
-            </div>
-            <p class="leise klein" style="margin:10px 0 0">Inhalt und Nummer lassen sich nicht mehr ändern (GoBD). Korrekturen gehen nur per Storno. Zahlungen werden protokolliert.</p>
-          </section>
+          <div class="knopfreihe">
+            <button class="knopf" data-act="pdfOeffnen">${ic('druck')} PDF</button>
+            ${['offen', 'ueberfaellig'].includes(st) ? `<button class="knopf zweit" data-act="zahlungDialog">${ic('euro')} Zahlung</button>` : ''}
+            <button class="knopf zweit" data-act="mailHinweis">${ic('mail')} Mail</button>
+          </div>
+          <div class="knopfreihe leise-reihe">
+            ${r.typ !== 'storno' ? `<button class="knopf leise" data-act="wieDiese">${ic('kopie')} Als neue Rechnung kopieren</button>` : ''}
+            ${['offen', 'ueberfaellig', 'bezahlt'].includes(st) && r.typ !== 'storno' && !r.storniertDurch ? `<button class="knopf leise warnfarbe" data-act="stornoFragen">${ic('storno')} Stornieren</button>` : ''}
+          </div>
+          <p class="leise klein" style="margin:0">${ic('schloss')} Festgeschrieben${r.festgeschriebenAm ? ' am ' + new Date(r.festgeschriebenAm).toLocaleString('de-DE', { dateStyle: 'medium', timeStyle: 'short' }) : ''} – unveränderbar archiviert${r.pdf?.datei ? ` (${esc(r.pdf.datei)})` : modus === 'vorschau' ? ' (in der Vorschau ohne PDF)' : ''}. Korrekturen nur per Storno.</p>
         </div>
         <div>${blattHtml(f, { entwurf: false, logo: firma().logo })}</div>
       </div>`;
@@ -650,86 +654,68 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
 
   // ── Baustellen ──
   function ansichtBaustellen() {
-    const f = [['aktiv', 'Laufend'], ['abgeschlossen', 'Abgeschlossen'], ['alle', 'Alle']];
-    return kopf({ titel: 'Baustellen', unter: 'Notizen, Fotos und Diktate je Baustelle', rechts: `<button class="knopf" data-act="neueBaustelle">${ic('plus')} Neu</button>` }) + `
-      <div class="stapel">${vorschauBand()}
-        <div class="filter">${f.map(([w, t]) => `<button class="chip ${Z.filterB === w ? 'an' : ''}" data-act="baustellenFilter" data-wert="${w}">${t}</button>`).join('')}</div>
-        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-b" type="search" data-suche="B" value="${esc(Z.sucheB)}" placeholder="Baustelle, Kunde oder Ort"></label>
-        <section class="karte"><div class="liste" id="liste-b">${baustellenListeHtml()}</div></section>
+    const viele = baustellen().length > 8;
+    return kopf({ titel: 'Baustellen', rechts: statusOrt() + rundKnopf('neueBaustelle', 'plus', 'Neue Baustelle') }) + `
+      <div class="stapel">
+        <div class="filter">${[['aktiv', 'Laufend'], ['abgeschlossen', 'Abgeschlossen']].map(([w, t]) => `<button class="chip ${Z.filterB === w ? 'an' : ''}" data-act="baustellenFilter" data-wert="${w}">${t}</button>`).join('')}</div>
+        ${viele ? `<label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-b" type="search" data-suche="B" value="${esc(Z.sucheB)}" placeholder="Suchen"></label>` : ''}
+        <section class="karte"><div class="liste" id="liste-b">${baustellenListeHtml(viele)}</div></section>
       </div>`;
   }
-  function baustellenListeHtml() {
-    const q = Z.sucheB.trim().toLowerCase(), zahlen = notizZahlen();
-    const l = baustellenSortiert(false).filter(b => (Z.filterB === 'alle' || (Z.filterB === 'abgeschlossen') === (b.status === 'abgeschlossen'))
+  function baustellenListeHtml(mitSuche = true) {
+    const q = mitSuche ? Z.sucheB.trim().toLowerCase() : '', zahlen = notizZahlen();
+    const l = baustellenSortiert(false).filter(b => (Z.filterB === 'abgeschlossen') === (b.status === 'abgeschlossen')
       && (!q || [b.name, b.nummer, b.strasse, b.ort, kunde(b.kundeId)?.name].join(' ').toLowerCase().includes(q)));
-    if (!l.length) return `<div class="leer">${Z.filterB === 'aktiv' && !q ? 'Keine laufenden Baustellen. Lege eine an – dann ordnest du Notizen mit einem Tipp zu.' : 'Keine passenden Baustellen.'}</div>`;
+    if (!l.length) return `<div class="leer">${Z.filterB === 'aktiv' && !q ? 'Noch keine laufenden Baustellen.' : 'Keine Baustellen.'}</div>`;
     return l.map(b => baustelleZeile(b, zahlen.get(b.id))).join('');
   }
   function baustelleZeile(b, z) {
-    const k = kunde(b.kundeId);
     return `<button class="zeile" data-act="baustelleOeffnen" data-id="${b.id}"><span class="haupt">${esc(b.name)}</span>
-      <span class="rechts">${z?.offen ? `<span class="pille offen">${z.offen} offen</span>` : b.status === 'abgeschlossen' ? '<span class="pille entwurf">Abgeschlossen</span>' : ''}</span>
-      <span class="neben">${esc([k?.name || 'ohne Kunde', b.ort].filter(Boolean).join(' · '))}</span><span class="rechts leise klein">${z?.alle ? mehrzahl(z.alle, 'Notiz', 'Notizen') : ''}</span></button>`;
+      <span class="rechts">${z?.offen ? `<span class="zahl-badge" title="offene Notizen">${z.offen}</span>` : ''}</span>
+      <span class="neben">${esc([kunde(b.kundeId)?.name, b.ort].filter(Boolean).join(' · ') || 'ohne Kunde')}</span><span></span></button>`;
   }
   function ansichtBaustelle() {
     const b = baustelle(Z.id), k = kunde(b.kundeId);
     const ns = notizenVon(b.id).sort(neuesteZuerst);
-    const offen = ns.filter(istOffen);
-    const vs = vorschlaegeSumme(offen.map(notizText).filter(Boolean), leistungen());
+    const offen = ns.filter(istOffen).length;
     const rs = rechnungen().filter(r => r.baustelleId === b.id).sort((x, y) => String(y.datum || y._geaendert).localeCompare(String(x.datum || x._geaendert)));
     const entwurf = rs.find(r => r.status === 'entwurf' && !r.freigabe);
     const fertig = b.status === 'abgeschlossen';
     const tage = new Map();
     for (const n of ns) { const d = istIso(n.datum) ? n.datum : String(n.angelegt || '').slice(0, 10); if (!tage.has(d)) tage.set(d, []); tage.get(d).push(n); }
-    return kopf({ titel: b.name, unter: [b.nummer || 'Nummer folgt beim Abgleich', k?.name].filter(Boolean).join(' · '), zurueckKnopf: true,
-      rechts: `<button class="rund" data-act="baustelleBearbeiten" data-id="${b.id}" aria-label="Baustelle bearbeiten">${ic('stift')}</button>` }) + `
-      <div class="stapel">${vorschauBand()}
-        <section class="karte">
-          <div class="baustelle-kopf"><div class="angaben">
-            <div class="ort">${ic('ort')}<span>${esc(adresse(b) || 'Keine Adresse hinterlegt')}</span></div>
-            <div class="ort">${ic('kunden')}${k ? `<button class="link" data-act="kundeOeffnen" data-id="${k.id}">${esc(k.name)}</button>` : '<span class="leise">noch ohne Kunde</span>'}</div>
-            ${istIso(b.beginn) ? `<div class="ort leise">${ic('kalender')}<span>seit ${datumDe(b.beginn)}${fertig && istIso(b.ende) ? ' · abgeschlossen am ' + datumDe(b.ende) : ''}</span></div>` : ''}
-          </div><span class="pille ${fertig ? 'entwurf' : 'offen'}">${fertig ? 'Abgeschlossen' : 'Laufend'}</span></div>
-          ${b.notiz ? `<p class="leise klein" style="margin:10px 0 0;white-space:pre-wrap">${esc(b.notiz)}</p>` : ''}
-          <div class="knopfreihe" style="margin-top:14px">
-            <button class="knopf" data-act="baustelleNotiz" data-id="${b.id}">${ic('mikro')} Notiz</button>
-            ${offen.length ? `<button class="knopf zweit" data-act="rechnungAusBaustelle" data-id="${b.id}">${ic('rechnung')} ${entwurf ? 'In den Entwurf' : 'Rechnung erstellen'} (${mehrzahl(offen.length, 'Notiz', 'Notizen')})</button>`
-              : `<button class="knopf zweit" data-act="rechnungFuerBaustelle" data-id="${b.id}">${ic('rechnung')} ${entwurf ? 'Zum Entwurf' : 'Rechnung'}</button>`}
-          </div>
-        </section>
-        ${vs.length ? `<section class="karte"><h2>${ic('okkreis')} Aus ${mehrzahl(offen.length, 'offener Notiz', 'offenen Notizen')} erkannt</h2>
-          <div class="filter wrap">${vs.map(p => `<span class="chip mini">${mengeText(p.menge)} ${esc(p.einheit)} · ${esc(p.bezeichnung)}</span>`).join('')}</div>
-          <p class="leise klein" style="margin:10px 0 0">Vorschlag – kommt erst beim Erstellen der Rechnung hinein und lässt sich dort anpassen.</p></section>` : ''}
-        <section class="karte"><h2>${ic('notiz')} Bautagebuch<span class="leise klein rechts">${mehrzahl(ns.length, 'Notiz', 'Notizen')}</span></h2>
-          ${ns.length ? [...tage].map(([d, l]) => `<div class="tag-kopf">${esc(tagText(d))}</div>${l.map(n => notizKarte(n, { art: 'tagebuch' })).join('')}`).join('')
-            : '<div class="leer">Noch keine Notizen. Tippe auf „Notiz" – diktieren, fotografieren, fertig.</div>'}
-        </section>
-        ${rs.length ? `<section class="karte"><h2>${ic('rechnung')} Rechnungen</h2><div class="liste">${rs.map(rechnungZeile).join('')}</div></section>` : ''}
-        <div class="knopfreihe">
-          <button class="knopf leise" data-act="baustelleStatus" data-id="${b.id}">${fertig ? 'Baustelle wieder öffnen' : `${ic('haken')} Baustelle abschließen`}</button>
-          ${!ns.length && !rs.length ? `<button class="knopf leise" data-act="baustelleLoeschenFragen" data-id="${b.id}">${ic('muell')} Löschen</button>` : ''}
+    return kopf({ titel: b.name, unter: [k?.name, adresse(b)].filter(Boolean).join(' · '), zurueckKnopf: true,
+      rechts: statusOrt() + rundKnopf('baustelleBearbeiten', 'stift', 'Baustelle bearbeiten', `data-id="${b.id}"`) }) + `
+      <div class="stapel">
+        ${fertig ? `<div class="box">${ic('haken')}<span>Abgeschlossen${istIso(b.ende) ? ' am ' + datumDe(b.ende) : ''}</span></div>` : ''}
+        <div class="knopfreihe zwei">
+          <button class="knopf" data-act="baustelleNotiz" data-id="${b.id}">${ic('mikro')} Notiz</button>
+          <button class="knopf zweit" data-act="${offen ? 'rechnungAusBaustelle' : 'rechnungFuerBaustelle'}" data-id="${b.id}">${ic('rechnung')} ${offen ? `Rechnung · ${offen}` : entwurf ? 'Zum Entwurf' : 'Rechnung'}</button>
         </div>
+        ${b.notiz ? `<p class="hinweis-text">${esc(b.notiz)}</p>` : ''}
+        <section class="karte">${ns.length ? [...tage].map(([d, l]) => `<div class="tag-kopf">${esc(tagText(d))}</div>${l.map(n => notizKarte(n, { imTagebuch: true })).join('')}`).join('')
+          : '<div class="leer">Noch keine Notizen.</div>'}</section>
+        ${rs.length ? `<section class="karte"><h2>Rechnungen</h2><div class="liste">${rs.map(rechnungZeile).join('')}</div></section>` : ''}
+        <div><button class="knopf leise" data-act="baustelleStatus" data-id="${b.id}">${fertig ? 'Wieder öffnen' : 'Baustelle abschließen'}</button></div>
       </div>`;
   }
   function ansichtBaustelleForm() {
     const d = Z.form.daten, neu = Z.form.neu, k = kunde(d.kundeId);
     const inp = (feld, label, extra = '') => `<label class="feld ${extra.includes('ganz') ? 'ganz' : ''}"><span>${label}</span><input id="b-${feld}" data-form="${feld}" value="${esc(d[feld] || '')}" ${extra.replace('ganz', '')}></label>`;
     const seg = (feld, werte) => `<div class="segment">${werte.map(([w, t]) => `<button type="button" class="${d[feld] === w ? 'an' : ''}" data-act="formWahl" data-feld="${feld}" data-wert="${w}">${t}</button>`).join('')}</div>`;
-    return kopf({ titel: neu ? 'Neue Baustelle' : d.name || 'Baustelle', unter: neu ? '' : d.nummer || '', zurueckKnopf: true }) + `
+    const leer = !neu && !notizenVon(d.id).length && !rechnungen().some(r => r.baustelleId === d.id);
+    return kopf({ titel: neu ? 'Neue Baustelle' : 'Baustelle bearbeiten', unter: neu ? '' : d.nummer || '', zurueckKnopf: true }) + `
       <div class="stapel">
         <section class="karte"><div class="felder">
-          ${inp('name', 'Name der Baustelle', 'ganz placeholder="z. B. Bad OG Schneider oder Wohnanlage Am Ring, Haus B"')}
-          <label class="feld ganz"><span>Kunde (Rechnungsempfänger)</span><select id="b-kunde" data-form="kundeId"><option value="">– noch offen –</option>${kunden().map(x => `<option value="${x.id}" ${d.kundeId === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
-        </div></section>
-        <section class="karte"><h2>${ic('ort')} Adresse der Baustelle${k && adresse(k) !== adresse(d) ? `<button class="knopf leise rechts" data-act="baustelleAdresseVomKunden">Anschrift des Kunden</button>` : ''}</h2><div class="felder">
+          ${inp('name', 'Name', 'ganz placeholder="z. B. Bad OG Schneider"')}
+          <label class="feld ganz"><span>Kunde</span><select id="b-kunde" data-form="kundeId"><option value="">– noch offen –</option>${kunden().map(x => `<option value="${x.id}" ${d.kundeId === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
           ${inp('strasse', 'Straße und Hausnummer', 'ganz')}${inp('plz', 'PLZ', 'inputmode="numeric"')}${inp('ort', 'Ort')}
-        </div><p class="leise klein" style="margin:10px 0 0">Steht als Leistungsort im Betreff der Rechnung, wenn sie von der Kundenanschrift abweicht.</p></section>
-        <section class="karte"><div class="felder">
+          ${k && adresse(k) !== adresse(d) ? `<div class="ganz"><button class="knopf leise" data-act="baustelleAdresseVomKunden">Anschrift des Kunden übernehmen</button></div>` : ''}
           <label class="feld"><span>Beginn</span><input type="date" id="b-beginn" data-form="beginn" value="${esc(d.beginn || '')}"></label>
           <div class="feld"><span>Stand</span>${seg('status', [['aktiv', 'Laufend'], ['abgeschlossen', 'Abgeschlossen']])}</div>
-          <label class="feld ganz"><span>Hinweise (intern)</span><textarea id="b-notiz" data-form="notiz" placeholder="z. B. Schlüssel beim Hausmeister, Ansprechpartner Herr Maier">${esc(d.notiz || '')}</textarea></label>
+          <label class="feld ganz"><span>Hinweise</span><textarea id="b-notiz" data-form="notiz" placeholder="z. B. Schlüssel beim Hausmeister">${esc(d.notiz || '')}</textarea></label>
         </div></section>
         <div class="leiste-unten"><button class="knopf zweit" data-act="zurueck">Abbrechen</button><button class="knopf" data-act="baustelleSpeichern">${ic('haken')} Speichern</button></div>
+        ${leer ? `<div><button class="knopf leise" data-act="baustelleLoeschenFragen" data-id="${d.id}">${ic('muell')} Baustelle löschen</button></div>` : ''}
       </div>`;
   }
 
@@ -747,55 +733,57 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   function notizMerkenBald() { clearTimeout(merkTimer); merkTimer = setTimeout(notizMerken, 400); }
   /** Ungespeicherte neue Notiz auf dem Gerät festhalten – übersteht Neuladen und das Beenden der App. */
   function notizMerken() { clearTimeout(merkTimer); const n = Z.notiz; if (n?.neu) speicher.setMeta('notizEntwurf', notizLeer(n) ? null : kopie(n)); }
-  const speichernText = n => (!n.neu ? 'Änderungen speichern' : baustelle(n.baustelleId) ? 'Speichern · ' + baustelle(n.baustelleId).name : 'Speichern ohne Baustelle');
 
   function ansichtNotiz() {
-    const n = Z.notiz, bearbeiten = !n.neu;
+    const n = Z.notiz, bearbeiten = !n.neu, st = n.status || 'offen';
     const r = n.rechnungId ? speicher.holen('rechnungen', n.rechnungId) : null;
-    return kopf({ titel: bearbeiten ? 'Notiz bearbeiten' : 'Notiz', unter: bearbeiten ? `vom ${datumDe(n.datum)}${n.geraetName ? ' · ' + n.geraetName : ''}` : 'Diktieren, fotografieren – direkt zur Baustelle',
-      zurueckKnopf: bearbeiten || Z.verlauf.length > 0, rechts: abgleichChip() }) + `
-      <div class="stapel">${vorschauBand()}
-        ${bearbeiten && n.status === 'abgerechnet' ? `<div class="box">${ic('schloss')}<span>Diese Notiz ist mit Rechnung ${esc(r?.nummer || '')} abgerechnet. Änderungen hier ändern die Rechnung nicht.</span></div>` : ''}
-        <section class="karte notiz-erfassen">
-          <div><div class="etikett" style="margin-bottom:8px">Baustelle</div><div id="n-baustellen">${baustellenWahlHtml()}</div></div>
-          <div id="diktat">${diktatHtml()}</div>
-          <label class="feld"><span class="versteckt">Notiz</span><textarea id="n-text" data-n="text" rows="4" placeholder="Was wurde gemacht? z. B. 2,5 Std. Silikonfuge erneuert, 4 Meter, Anfahrt">${esc(n.text)}</textarea></label>
-          ${n.audio ? aufnahmeHtml(n) : ''}
-          ${n.fotos.length ? fotosHtml(n.fotos, true) : ''}
-          <div class="notiz-leiste">
-            <label class="knopf zweit foto-knopf">${ic('kamera')} Foto<input type="file" accept="image/*" capture="environment" data-act-change="fotoGewaehlt" aria-label="Foto aufnehmen"></label>
-            <label class="knopf leise foto-knopf">${ic('bild')} Galerie<input type="file" accept="image/*" multiple data-act-change="fotoGewaehlt" aria-label="Fotos aus der Galerie"></label>
-            <label class="datum-feld"><span class="versteckt">Datum</span><input type="date" id="n-datum" data-n="datum" value="${esc(n.datum)}"></label>
-          </div>
-          <div id="erkannt">${erkanntHtml(n)}</div>
-          <div class="knopfreihe">
-            <button class="knopf voll" data-act="notizSpeichern" id="n-speichern" ${notizLeer(n) ? 'disabled' : ''}>${ic('haken')} <span id="n-speichern-text" class="abschneiden">${esc(speichernText(n))}</span></button>
-            ${bearbeiten ? `<button class="knopf leise" data-act="notizLoeschenFragen" data-id="${n.id}">${ic('muell')} Löschen</button>`
-              : `<button class="knopf leise" data-act="notizVerwerfen" id="n-verwerfen" ${notizLeer(n) ? 'hidden' : ''}>Verwerfen</button>`}
-          </div>
-        </section>
-        ${bearbeiten ? '' : `<section class="karte"><h2>${ic('notiz')} Notizen</h2>
-          <div class="filter" style="margin-bottom:4px">${[['offen', 'Offen'], ['ohne', 'Ohne Baustelle'], ['alle', 'Alle']].map(([w, t]) => `<button class="chip ${Z.filterN === w ? 'an' : ''}" data-act="notizenFilter" data-wert="${w}">${t}</button>`).join('')}</div>
-          <div id="liste-n">${notizenListeHtml()}</div></section>`}
+    const leise = bearbeiten ? [
+      st === 'offen' ? `<button class="knopf leise" data-act="notizRechnung" data-id="${n.id}">${ic('rechnung')} In Rechnung</button>` : '',
+      r ? `<button class="knopf leise" data-act="oeffneRechnung" data-id="${r.id}">${ic('rechnung')} ${r.nummer ? 'Rechnung ' + esc(r.nummer) : 'Zum Entwurf'}</button>` : '',
+      st === 'offen' ? `<button class="knopf leise" data-act="notizErledigt" data-id="${n.id}" title="Ohne Rechnung abhaken">${ic('haken')} Erledigt</button>`
+        : st === 'erledigt' ? `<button class="knopf leise" data-act="notizWiederOffen" data-id="${n.id}">Wieder offen</button>` : '',
+      st !== 'abgerechnet' ? `<button class="knopf leise" data-act="notizLoeschenFragen" data-id="${n.id}">${ic('muell')} Löschen</button>` : ''
+    ].join('') : `<button class="knopf leise" data-act="notizVerwerfen" id="n-verwerfen" ${notizLeer(n) ? 'hidden' : ''}>Verwerfen</button>`;
+    return kopf({ titel: bearbeiten ? 'Notiz' : 'Neue Notiz', unter: bearbeiten ? [datumKurz(n.datum), n.geraetName].filter(Boolean).join(' · ') : '', zurueckKnopf: true, rechts: statusOrt() }) + `
+      <div class="stapel notiz-seite">
+        ${bearbeiten && st !== 'offen' ? `<div class="box">${ic(st === 'abgerechnet' ? 'schloss' : 'haken')}<span>${st === 'abgerechnet' ? `Abgerechnet${r?.nummer ? ' mit Rechnung ' + esc(r.nummer) : ''}` : st === 'zugeordnet' ? 'Steckt in einem Rechnungsentwurf' : 'Erledigt (ohne Rechnung)'}</span></div>` : ''}
+        <div id="n-baustellen">${baustellenWahlHtml()}</div>
+        <textarea id="n-text" data-n="text" rows="5" placeholder="Was wurde gemacht?" aria-label="Notiz">${esc(n.text)}</textarea>
+        <div class="zwischen" id="d-zwischen"></div>
+        <div class="notiz-leiste">
+          <span id="diktat">${diktatHtml()}</span>
+          <label class="knopf zweit symbol foto-knopf" title="Foto aufnehmen">${ic('kamera')}<input type="file" accept="image/*" capture="environment" data-act-change="fotoGewaehlt" aria-label="Foto aufnehmen"></label>
+          <label class="knopf zweit symbol foto-knopf" title="Aus der Galerie">${ic('bild')}<input type="file" accept="image/*" multiple data-act-change="fotoGewaehlt" aria-label="Fotos aus der Galerie"></label>
+          <label class="knopf leise datum-knopf" title="Datum ändern">${ic('kalender')}<span id="n-datum-text">${esc(datumKurz(n.datum) || 'Datum')}</span><input type="date" id="n-datum" data-n="datum" value="${esc(n.datum)}" aria-label="Datum"></label>
+        </div>
+        ${n.audio ? aufnahmeHtml(n) : ''}
+        ${n.fotos.length ? fotosHtml(n.fotos, true) : ''}
+        <div class="erkannt-zeile" id="erkannt">${erkanntHtml(n)}</div>
+        <button class="knopf voll" data-act="notizSpeichern" id="n-speichern" ${notizLeer(n) ? 'disabled' : ''}>Speichern</button>
+        <div class="knopfreihe leise-reihe">${leise}</div>
       </div>`;
   }
   function baustellenWahlHtml() {
     const n = Z.notiz, gewaehlt = baustelle(n.baustelleId);
     const liste = [...(gewaehlt ? [gewaehlt] : []), ...baustellenSortiert(true).filter(b => b.id !== gewaehlt?.id)].slice(0, 12);
-    const k = gewaehlt ? kunde(gewaehlt.kundeId) : null;
-    return `<div class="filter baustellen-wahl">${liste.map(b => `<button class="chip ${b.id === n.baustelleId ? 'an' : ''}" data-act="notizBaustelle" data-id="${b.id}">${b.id === n.baustelleId ? ic('haken') : ''}${esc(b.name)}</button>`).join('')}
-      <button class="chip dazu" data-act="baustelleSchnell" data-ziel="notiz">Neue Baustelle</button>
-      <button class="chip ${!n.baustelleId ? 'an' : ''}" data-act="notizBaustelle" data-id="">Ohne</button></div>
-      ${gewaehlt ? `<div class="ort-zeile">${ic('ort')}<span>${esc([k?.name, adresse(gewaehlt)].filter(Boolean).join(' · ') || 'ohne Adresse')}${n.baustelleAuto && n.neu ? ' · <em>automatisch gewählt</em>' : ''}</span></div>` : ''}`;
+    return `<div class="filter baustellen-wahl" aria-label="Baustelle">${liste.map(b => `<button class="chip ${b.id === n.baustelleId ? 'an' : ''}" data-act="notizBaustelle" data-id="${b.id}">${b.id === n.baustelleId ? ic('haken') : ''}${esc(b.name)}</button>`).join('')}
+      <button class="chip dazu" data-act="baustelleSchnell">Baustelle</button>
+      <button class="chip ${!n.baustelleId ? 'an' : ''}" data-act="notizBaustelle" data-id="">Ohne</button></div>`;
   }
+  /** Erkannte Leistungen als stille Zeile unter der Notiz. */
   function erkanntHtml(n, v = null) {
     const text = notizText(n);
     if (!text.trim()) return '';
     v = v || vorschlaegeAus(text, leistungen(), kunden(), baustellen());
-    if (!v.positionen.length) return `<div class="box">${ic('suche')}<span>Noch keine Leistung aus dem Katalog erkannt. Mengen und Stichworte wie „2,5 Std.", „Anfahrt" oder „4 m Silikonfuge" findet die App von selbst.</span></div>`;
-    return `<div class="box gold">${ic('okkreis')}<div class="erkannt"><strong>Erkannt</strong>
-      <div class="filter wrap">${v.positionen.map(p => `<span class="chip mini">${mengeText(p.menge)} ${esc(p.einheit)} · ${esc(p.bezeichnung)}</span>`).join('')}</div>
-      <small class="leise">Vorschlag für die Rechnung – übernommen wird erst, wenn du aus der Notiz eine Rechnung machst.</small></div></div>`;
+    if (!v.positionen.length) return '';
+    return `${ic('okkreis')}<span>${v.positionen.map(p => `${esc(mengeText(p.menge))} ${esc(p.einheit)} ${esc(p.bezeichnung)}`).join(' · ')}</span>`;
+  }
+  function ansichtNotizen() {
+    return kopf({ titel: 'Notizen', zurueckKnopf: Z.verlauf.length > 0, rechts: statusOrt() }) + `
+      <div class="stapel">
+        <div class="filter">${[['offen', 'Offen'], ['ohne', 'Ohne Baustelle'], ['alle', 'Alle']].map(([w, t]) => `<button class="chip ${Z.filterN === w ? 'an' : ''}" data-act="notizenFilter" data-wert="${w}">${t}</button>`).join('')}</div>
+        <section class="karte" id="liste-n">${notizenListeHtml()}</section>
+      </div>`;
   }
   function notizenListeHtml() {
     let l = notizen();
@@ -807,54 +795,37 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   }
   const fotosHtml = (ids, loeschbar = false) => `<div class="fotos">${ids.map(id => `<div class="foto"><button class="foto-oeffnen" data-act="fotoZeigen" data-id="${id}" aria-label="Foto ansehen"><img src="${esc(dateiUrl(id))}" alt="" loading="lazy"></button>
     ${loeschbar ? `<button class="loeschen" data-act="fotoEntfernen" data-id="${id}" aria-label="Foto entfernen">${ic('muell')}</button>` : ''}</div>`).join('')}</div>`;
-  function abschriftHtml(n) {
-    if (!n.audio) return '';
-    const s = n.abschriftStatus, dauer = dauerText(n.audioSekunden || 0);
-    if (s === 'fertig' && n.abschrift) return n.abschriftUebernommen ? '' : `<div class="abschrift">${ic('welle')}<div><span class="leise klein">Abgetippt am Laptop</span><br>${esc(n.abschrift)}</div></div>`;
-    if (s === 'fertig') return `<div class="abschrift wartet">${ic('welle')}<span>Sprachaufnahme ${dauer} – kein Text erkannt.</span></div>`;
-    if (s === 'keine-erkennung') return `<div class="abschrift wartet">${ic('welle')}<span>Sprachaufnahme ${dauer} – das Abtippen ist am Laptop noch nicht eingerichtet (siehe Einstellungen → Diktat).</span></div>`;
-    if (s === 'fehler') return `<div class="abschrift wartet">${ic('warn')}<span>Abtippen hat nicht geklappt – die Aufnahme ist trotzdem gespeichert.</span></div>`;
-    return `<div class="abschrift wartet">${ic('welle')}<span>Sprachaufnahme ${dauer} – ${n._seq ? 'wird am Laptop abgetippt …' : 'wird abgetippt, sobald der Laptop erreichbar ist.'}</span></div>`;
+  /** Stand der Abschrift einer Sprachaufnahme in wenigen Worten. */
+  function abschriftStand(n) {
+    const s = n.abschriftStatus;
+    if (s === 'fertig') return n.abschrift ? '' : 'kein Text erkannt';
+    if (s === 'keine-erkennung') return 'Abtippen am Laptop nicht eingerichtet';
+    if (s === 'fehler') return 'Abtippen fehlgeschlagen';
+    return n._seq ? 'wird am Laptop abgetippt …' : 'wird abgetippt, sobald der Laptop erreichbar ist';
   }
   function aufnahmeHtml(n) {
     // Abschrift nur zeigen, wenn sie zu genau dieser (gespeicherten) Aufnahme gehört – nicht zu einer gerade neu aufgenommenen
     const gespeichert = n.neu ? null : speicher.holen('notizen', n.id);
     const gleicheAufnahme = !!gespeichert && gespeichert.audio === n.audio;
     const fertig = gleicheAufnahme && n.abschriftStatus === 'fertig' && n.abschrift;
-    return `<div class="aufnahme"><div class="aufnahme-kopf">${ic('welle')}<span>Sprachaufnahme ${dauerText(n.audioSekunden || 0)}</span>
-        <button class="knopf leise" data-act="aufnahmeEntfernen">${ic('muell')} Entfernen</button></div>
-      <audio controls preload="metadata" src="${esc(dateiUrl(n.audio))}"></audio>
-      ${fertig ? (n.abschriftUebernommen ? '<span class="leise klein">Die Abschrift steht im Text.</span>'
-        : `<div class="abschrift">${ic('welle')}<div><span class="leise klein">Abgetippt am Laptop</span><br>${esc(n.abschrift)}</div></div><div><button class="knopf zweit klein" data-act="abschriftUebernehmen">${ic('plus')} In den Text übernehmen</button></div>`)
-        : gleicheAufnahme && n.abschriftStatus ? abschriftHtml(n)
-        : `<span class="leise klein">Nach dem Speichern tippt der Laptop die Aufnahme ab${modus === 'vorschau' ? ' (hier nachgebildet)' : ' – offline, nichts geht ins Internet'}. Weiter diktieren hängt an diese Aufnahme an.</span>`}
+    return `<div class="aufnahme"><div class="aufnahme-kopf"><audio controls preload="metadata" src="${esc(dateiUrl(n.audio))}"></audio>
+        <button class="loeschen" data-act="aufnahmeEntfernen" aria-label="Aufnahme entfernen" title="Aufnahme entfernen">${ic('muell')}</button></div>
+      ${fertig ? (n.abschriftUebernommen ? '' : `<p class="abschrift-text">${esc(n.abschrift)} <button class="link" data-act="abschriftUebernehmen">In den Text</button></p>`)
+        : `<span class="leise klein">${ic('welle')} ${gleicheAufnahme ? esc(abschriftStand(n)) : 'Der Laptop tippt die Aufnahme nach dem Speichern ab.'}</span>`}
     </div>`;
   }
-  function notizKarte(n, { art = 'liste' } = {}) {
-    const b = baustelle(n.baustelleId), r = n.rechnungId ? speicher.holen('rechnungen', n.rechnungId) : null;
-    const v = vorschlaegeAus(notizText(n), leistungen(), kunden(), baustellen());
-    const [stText, stKlasse] = NOTIZ_STATUS[n.status || 'offen'] || NOTIZ_STATUS.offen;
-    const kopfTeile = [art === 'tagebuch' ? '' : datumKurz(n.datum), art === 'tagebuch' || art === 'editor' ? '' : b ? b.name : 'ohne Baustelle', n.geraetName ? 'von ' + n.geraetName : ''].filter(Boolean);
-    let knoepfe;
-    if (art === 'editor') knoepfe = `${!v.positionen.length && notizText(n).trim() ? `<button class="knopf leise" data-act="notizAlsPosition" data-id="${n.id}">${ic('plus')} Als freie Position</button>` : ''}
-      <button class="knopf leise" data-act="notizAusEntwurf" data-id="${n.id}">Aus der Rechnung nehmen</button>`;
-    else if (art === 'wahl') knoepfe = `<button class="knopf klein" data-act="notizInEntwurf" data-id="${n.id}">${ic('plus')} Übernehmen</button>`;
-    else knoepfe = [
-      istOffen(n) ? `<button class="knopf zweit klein" data-act="notizRechnung" data-id="${n.id}">${ic('rechnung')} In Rechnung</button>` : '',
-      r && n.status !== 'erledigt' ? `<button class="knopf zweit klein" data-act="oeffneRechnung" data-id="${r.id}">${ic('rechnung')} ${r.nummer ? 'Rechnung ' + esc(r.nummer) : 'Zum Entwurf'}</button>` : '',
-      !b && n.status !== 'abgerechnet' ? `<button class="knopf leise" data-act="notizZuordnen" data-id="${n.id}">${ic('baustelle')} Baustelle zuordnen</button>` : '',
-      `<button class="knopf leise" data-act="notizBearbeiten" data-id="${n.id}">${ic('stift')} Bearbeiten</button>`,
-      istOffen(n) ? `<button class="knopf leise" data-act="notizErledigt" data-id="${n.id}" title="Ohne Rechnung abhaken, z. B. reine Info">Erledigt</button>`
-        : n.status === 'erledigt' ? `<button class="knopf leise" data-act="notizWiederOffen" data-id="${n.id}">Wieder offen</button>` : ''
-    ].join('');
-    return `<div class="notiz-karte ${n.status === 'erledigt' ? 'blass' : ''}">
-      <div class="nk-kopf"><span>${esc(kopfTeile.join(' · '))}</span><span class="pille ${stKlasse}">${stText}</span></div>
+  /** Notiz in Listen und im Bautagebuch – antippen öffnet sie. */
+  function notizKarte(n, { imTagebuch = false } = {}) {
+    const b = baustelle(n.baustelleId), st = n.status || 'offen';
+    const [stText, stKlasse] = NOTIZ_STATUS[st] || NOTIZ_STATUS.offen;
+    const abschrift = n.abschriftStatus === 'fertig' && n.abschrift && !n.abschriftUebernommen ? n.abschrift : '';
+    const fuss = imTagebuch ? [uhrzeit(n.angelegt), n.geraetName] : [datumKurz(n.datum), b ? b.name : 'Ohne Baustelle'];
+    return `<div class="notiz-karte ${st === 'erledigt' ? 'blass' : ''}" data-act="notizBearbeiten" data-id="${n.id}" role="button" tabindex="0">
       ${n.text ? `<p>${esc(n.text)}</p>` : ''}
-      ${abschriftHtml(n)}
-      ${(n.fotos || []).length ? fotosHtml(n.fotos) : ''}
-      ${n.audio ? `<audio controls preload="metadata" src="${esc(dateiUrl(n.audio))}"></audio>` : ''}
-      ${v.positionen.length ? `<div class="filter wrap">${v.positionen.map(p => `<span class="chip mini">${mengeText(p.menge)} ${esc(p.einheit)} · ${esc(p.bezeichnung)}</span>`).join('')}</div>` : ''}
-      <div class="knopfreihe">${knoepfe}</div>
+      ${abschrift ? `<p class="${n.text ? 'abschrift-text' : ''}">${esc(abschrift)}</p>` : ''}
+      ${n.audio && !abschrift ? `<p class="leise klein">${ic('welle')} Sprachaufnahme ${dauerText(n.audioSekunden || 0)} – ${esc(abschriftStand(n))}</p>` : ''}
+      ${(n.fotos || []).length || n.audio ? `<div class="medien">${(n.fotos || []).length ? fotosHtml(n.fotos) : ''}${n.audio ? `<audio controls preload="metadata" src="${esc(dateiUrl(n.audio))}"></audio>` : ''}</div>` : ''}
+      <div class="nk-fuss"><span>${esc(fuss.filter(Boolean).join(' · '))}</span>${st !== 'offen' ? `<span class="pille ${stKlasse}">${stText}</span>` : ''}</div>
     </div>`;
   }
   /** Nach Tippen oder Diktat: Erkennung, automatische Baustelle, Speichern-Knopf – ohne das Eingabefeld neu zu zeichnen. */
@@ -869,8 +840,23 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   function notizKnoepfeAktualisieren() {
     const n = Z.notiz;
     const k = wurzel.querySelector('#n-speichern'); if (k) k.disabled = notizLeer(n);
-    const t = wurzel.querySelector('#n-speichern-text'); if (t) t.textContent = speichernText(n);
     const vw = wurzel.querySelector('#n-verwerfen'); if (vw) vw.hidden = notizLeer(n);
+  }
+  /** Bearbeitete Notiz ablegen (ohne die Ansicht zu wechseln). */
+  function notizSichern(extra = {}) {
+    const n = Z.notiz;
+    const alt = n.neu ? null : speicher.holen('notizen', n.id);
+    const b = baustelle(n.baustelleId);
+    const v = b ? null : vorschlaegeAus(notizText(n), leistungen(), kunden());
+    const neu = speicher.aendern('notizen', {
+      ...(alt ? stripMeta(alt) : {}), id: n.id, text: String(n.text || '').trim(), baustelleId: b?.id || null,
+      kundeId: b ? b.kundeId || null : v?.kunde?.id || alt?.kundeId || null,
+      datum: istIso(n.datum) ? n.datum : heute(), fotos: [...n.fotos], audio: n.audio || null, audioSekunden: n.audio ? Number(n.audioSekunden) || 0 : 0,
+      abschriftUebernommen: !!n.abschriftUebernommen, status: alt?.status || 'offen', rechnungId: alt?.rechnungId || null,
+      angelegt: alt?.angelegt || new Date().toISOString(), geraetName: alt?.geraetName || speicher.geraet.name, ...extra
+    });
+    if (b) speicher.setMeta('letzteBaustelle', { id: b.id, zeit: Date.now() });
+    return neu;
   }
 
   // ── Diktat ──
@@ -887,25 +873,17 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const d = Z.diktat;
     if (d) {
       const aufnahme = d.art === 'aufnahme' || d.alsAufnahme;
-      return `<div class="diktat"><button type="button" class="diktat-knopf an" data-act="diktatStopp">
-          <span class="diktat-symbol">${ic('stopp')}</span>
-          <span class="diktat-text"><strong>${d.endet ? 'Wird beendet …' : aufnahme ? 'Aufnahme läuft' : 'Ich höre zu …'}</strong><small><span id="d-zeit">${dauerText(d.sek || 0)}</span> · zum Beenden tippen</small></span>
-          <span class="pegel ${aufnahme ? '' : 'auto'}" id="d-pegel" style="--p:${(d.pegel || 0).toFixed(2)}"><i></i><i></i><i></i><i></i><i></i></span></button>
-        <div class="zwischen" id="d-zwischen">${esc(d.zwischen || '')}</div></div>`;
+      return `<button type="button" class="knopf diktat-pille an" data-act="diktatStopp" aria-label="Diktat beenden">
+        <span class="pegel ${aufnahme ? '' : 'auto'}" id="d-pegel" style="--p:${(d.pegel || 0).toFixed(2)}"><i></i><i></i><i></i><i></i></span>
+        <span id="d-zeit">${d.endet ? '…' : dauerText(d.sek || 0)}</span>${ic('stopp')}</button>`;
     }
-    const art = diktatArt();
-    if (!art) return `<div class="box">${ic('mikro')}<span>Dieser Browser kann hier nicht selbst diktieren – nutze die Mikrofon-Taste der Tastatur.</span></div>`;
-    const andere = art === 'live' ? (aufnahmeHier() ? 'aufnahme' : null) : (liveHier() ? 'live' : null);
-    return `<div class="diktat"><button type="button" class="diktat-knopf" data-act="diktatStart">
-        <span class="diktat-symbol">${ic('mikro')}</span>
-        <span class="diktat-text"><strong>Diktieren</strong><small>${art === 'live' ? 'Der Text erscheint, während du sprichst' : 'Aufnahme – der Laptop tippt sie ab'}</small></span></button>
-      ${andere ? `<div class="diktat-art leise klein">${art === 'live' ? 'Spracherkennung des Browsers' : 'Aufnahme bleibt bei dir (Laptop)'} · <button class="link" data-act="diktatArtWechseln" data-wert="${andere}">${andere === 'live' ? 'live mitschreiben' : 'lieber aufnehmen'}</button></div>` : ''}</div>`;
+    return diktatArt() ? `<button type="button" class="knopf zweit diktat-pille" data-act="diktatStart">${ic('mikro')} Diktieren</button>` : '';
   }
   const diktatNeuZeichnen = () => teilErsetzen('#diktat', diktatHtml());
   /** Zeit, Pegel und Zwischentext aktualisieren – ohne den Knopf neu zu bauen (sonst gehen Antipper verloren). */
   function diktatTick() {
     const d = Z.diktat; if (!d) return;
-    const z = wurzel.querySelector('#d-zeit'); if (z) z.textContent = dauerText(d.sek || 0);
+    const z = wurzel.querySelector('#d-zeit'); if (z && !d.endet) z.textContent = dauerText(d.sek || 0);
     const p = wurzel.querySelector('#d-pegel'); if (p) p.style.setProperty('--p', (d.pegel || 0).toFixed(2));
     const w = wurzel.querySelector('#d-zwischen'); if (w && w.textContent !== (d.zwischen || '')) w.textContent = d.zwischen || '';
   }
@@ -928,6 +906,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     clearInterval(d.uhr); clearTimeout(d.notaus);
     if (d.art === 'live' && d.zwischen?.trim()) diktatText(d.zwischen);   // nicht mehr abgeschlossener Satzteil geht nicht verloren
     if (Z.diktat === d) Z.diktat = null;
+    const w = wurzel.querySelector('#d-zwischen'); if (w) w.textContent = '';
     diktatNeuZeichnen();
     d.fertig();
   }
@@ -963,7 +942,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
               speicher.setMeta('liveGesperrt', true);   // ab jetzt Aufnahme – starten darf sie nur ein neues Antippen
               diktatNeuZeichnen();
               zeigeToast('Live-Diktat ist hier gesperrt – bitte nochmal auf „Diktieren" tippen: Dann wird aufgenommen und der Laptop tippt ab.');
-            } else zeigeToast({ 'not-allowed': 'Kein Zugriff aufs Mikrofon – bitte in den Einstellungen erlauben.', network: 'Live-Diktat braucht Internet – ohne Netz „lieber aufnehmen" wählen.',
+            } else zeigeToast({ 'not-allowed': 'Kein Zugriff aufs Mikrofon – bitte in den Einstellungen erlauben.', network: 'Live-Diktat braucht Internet – in den Einstellungen auf „Aufnahme" stellen.',
               'audio-capture': 'Kein Mikrofon gefunden.' }[fehler] || `Diktat unterbrochen (${fehler})`);
           },
           beiEnde: () => diktatEnde(d)
@@ -1047,10 +1026,10 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   // ── Kunden ──
   function ansichtKunden() {
     const f = [['alle', 'Alle'], ['privat', 'Privat'], ['firma', 'Firmen'], ['behoerde', 'Behörden']];
-    return kopf({ titel: 'Kunden', rechts: `<button class="knopf" data-act="neuerKunde">${ic('plus')} Neu</button>` }) + `
-      <div class="stapel">${vorschauBand()}
+    return kopf({ titel: 'Kunden', zurueckKnopf: Z.verlauf.length > 0, rechts: statusOrt() + rundKnopf('neuerKunde', 'plus', 'Neuer Kunde') }) + `
+      <div class="stapel">
         <div class="filter">${f.map(([w, t]) => `<button class="chip ${Z.filterK === w ? 'an' : ''}" data-act="kundenFilter" data-wert="${w}">${t}</button>`).join('')}</div>
-        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-k" type="search" data-suche="K" value="${esc(Z.sucheK)}" placeholder="Name, Ort oder Kundennummer"></label>
+        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-k" type="search" data-suche="K" value="${esc(Z.sucheK)}" placeholder="Suchen"></label>
         <section class="karte"><div class="liste" id="liste-k">${kundenListeHtml()}</div></section>
       </div>`;
   }
@@ -1061,7 +1040,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     return l.map(k => {
       const offen = rechnungen().filter(r => r.kundeId === k.id && ['offen', 'ueberfaellig'].includes(zahlstatus(r, h))).reduce((s, r) => s + offenerBetrag(r), 0);
       return `<button class="zeile" data-act="kundeOeffnen" data-id="${k.id}"><span class="haupt">${esc(k.name)}</span><span class="rechts">${offen ? euro(offen) : ''}</span>
-        <span class="neben">${esc([k.nummer || 'neu', k.ort].filter(Boolean).join(' · '))}</span><span class="rechts"><span class="pille typ">${KUNDENTYPEN[k.typ] || ''}</span></span></button>`;
+        <span class="neben">${esc([KUNDENTYPEN[k.typ], k.ort].filter(Boolean).join(' · '))}</span><span></span></button>`;
     }).join('');
   }
   function ansichtKunde() {
@@ -1073,58 +1052,50 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const zahlen = notizZahlen();
     return kopf({ titel: neu ? 'Neuer Kunde' : d.name || 'Kunde', unter: neu ? '' : `${d.nummer || 'Nummer folgt beim Abgleich'} · ${KUNDENTYPEN[d.typ]}`, zurueckKnopf: true }) + `
       <div class="stapel">
-        <section class="karte"><h2>Art des Kunden</h2>${seg('typ', [['privat', 'Privat'], ['firma', 'Firma'], ['behoerde', 'Behörde']])}
-          <p class="leise klein" style="margin:10px 0 0">${d.typ === 'privat' ? 'Privatkunden bekommen automatisch den Ausweis der Arbeitskosten (§ 35a EStG), den Aufbewahrungs- und den Verzugshinweis.' : d.typ === 'firma' ? 'Firmen: ab 2028 nur noch E-Rechnung (ZUGFeRD/XRechnung) – die Daten dafür sammelt die App schon jetzt.' : 'Behörden verlangen eine XRechnung mit Leitweg-ID.'}</p></section>
-        <section class="karte"><h2>Name und Anschrift</h2><div class="felder">
+        <section class="karte"><div class="felder">
+          <div class="feld ganz"><span>Art</span>${seg('typ', [['privat', 'Privat'], ['firma', 'Firma'], ['behoerde', 'Behörde']])}</div>
           ${d.typ === 'privat' ? `<div class="feld ganz"><span>Anrede</span>${seg('anrede', [['Herr', 'Herr'], ['Frau', 'Frau'], ['', 'Familie / ohne']])}</div>` : ''}
-          ${inp('name', d.typ === 'privat' ? 'Name (z. B. Hans Huber oder Familie Schneider)' : d.typ === 'firma' ? 'Firmenname' : 'Behörde / Dienststelle', 'ganz')}
-          ${inp('zusatz', 'Zusatz (z. B. z. Hd. Frau Maier, Abteilung)', 'ganz')}
+          ${inp('name', d.typ === 'privat' ? 'Name' : d.typ === 'firma' ? 'Firmenname' : 'Behörde / Dienststelle', 'ganz')}
+          ${inp('zusatz', 'Zusatz (z. B. z. Hd. Frau Maier)', 'ganz')}
           ${inp('strasse', 'Straße und Hausnummer', 'ganz')}
           ${inp('plz', 'PLZ', 'inputmode="numeric"')}${inp('ort', 'Ort')}
-        </div></section>
-        <section class="karte"><h2>Kontakt und Versand</h2><div class="felder">
           ${inp('mail', 'E-Mail', 'type="email"')}${inp('telefon', 'Telefon', 'type="tel"')}
-          <div class="feld ganz"><span>Rechnung kommt per</span>${seg('versand', [['mail', 'E-Mail (PDF)'], ['post', 'Post']])}</div>
-          ${d.versand === 'mail' ? `<label class="schalter ganz"><input type="checkbox" id="k-zust" data-form-schalter="zustimmungMail" ${d.zustimmungMail ? 'checked' : ''}><span>Kunde ist mit Rechnungen per E-Mail einverstanden${d.zustimmungMail ? ` (vermerkt am ${datumDe(d.zustimmungMail)})` : ''}<br><small class="leise">Pflicht für PDF-Rechnungen per Mail – formlos genügt (mündlich, per Mail, im Auftrag).</small></span></label>` : ''}
-        </div></section>
-        ${d.typ !== 'privat' ? `<section class="karte"><h2>Steuer und E-Rechnung</h2><div class="felder">
-          ${d.typ === 'firma' ? inp('ustId', 'USt-IdNr. des Kunden (optional)', 'placeholder="DE123456789"') : ''}
+          <div class="feld ganz"><span>Rechnung per</span>${seg('versand', [['mail', 'E-Mail (PDF)'], ['post', 'Post']])}</div>
+          ${d.versand === 'mail' ? `<label class="schalter ganz"><input type="checkbox" id="k-zust" data-form-schalter="zustimmungMail" ${d.zustimmungMail ? 'checked' : ''}><span>Einverstanden mit Rechnungen per E-Mail${d.zustimmungMail ? ` (vermerkt am ${datumDe(d.zustimmungMail)})` : ''}</span></label>` : ''}
+          ${d.typ === 'firma' ? inp('ustId', 'USt-IdNr. (optional)', 'placeholder="DE123456789"') : ''}
           ${d.typ === 'behoerde' ? inp('leitwegId', 'Leitweg-ID', 'placeholder="z. B. 09162000-12345-06"') : ''}
-          ${d.typ === 'firma' ? `<label class="schalter ganz"><input type="checkbox" id="k-13b" data-form-schalter="bauleistender13b" ${d.bauleistender13b ? 'checked' : ''}><span>Kunde erbringt selbst Bauleistungen (§ 13b UStG)<br><small class="leise">Z. B. Bauträger oder Generalunternehmer mit Freistellungsnachweis (USt 1 TG). Dann schuldet der Kunde die Umsatzsteuer – die Rechnung geht ohne USt raus.</small></span></label>` : ''}
+          ${d.typ === 'firma' ? `<label class="schalter ganz"><input type="checkbox" id="k-13b" data-form-schalter="bauleistender13b" ${d.bauleistender13b ? 'checked' : ''}><span>Erbringt selbst Bauleistungen (§ 13b UStG)<br><small class="leise">Dann schuldet der Kunde die Umsatzsteuer – die Rechnung geht ohne USt raus.</small></span></label>` : ''}
           ${d.ustId && !ustIdGueltig(d.ustId) ? '<div class="box ocker ganz">' + ic('warn') + '<span>Die USt-IdNr. hat nicht das Format DE + 9 Ziffern.</span></div>' : ''}
-        </div></section>` : ''}
-        <section class="karte"><h2>Zahlung und wiederkehrende Positionen</h2><div class="felder">
-          <label class="feld"><span>Zahlungsziel in Tagen (leer = Standard)</span><input id="k-ziel" data-form="zahlungszielTage" inputmode="numeric" value="${d.zahlungszielTage ?? ''}"></label>
-        </div>
-          <p class="leise klein">Wiederkehrende Positionen sind bei jeder neuen Rechnung für diesen Kunden schon angehakt.</p>
+          <label class="feld"><span>Zahlungsziel in Tagen</span><input id="k-ziel" data-form="zahlungszielTage" inputmode="numeric" value="${d.zahlungszielTage ?? ''}" placeholder="Standard"></label>
+        </div></section>
+        <section class="karte"><h2>Wiederkehrende Positionen</h2>
           <div class="liste">${(d.standard || []).map((s, i) => { const l = leistung(s.leistungId); return l ? `<div class="zeile" style="cursor:default"><span class="haupt">${esc(l.bezeichnung)}</span>
             <span class="rechts"><button class="loeschen" data-act="standardEntfernen" data-i="${i}" aria-label="Entfernen">${ic('muell')}</button></span>
-            <span class="neben"><input id="k-std-${i}" data-std="${i}" inputmode="decimal" value="${mengeText(s.menge)}" style="width:80px;min-height:34px;padding:5px 8px"> ${esc(l.einheit)} · ${euro(l.preisCent)}</span><span></span></div>` : ''; }).join('') || '<div class="leer">Keine wiederkehrenden Positionen.</div>'}</div>
-          <button class="knopf zweit" data-act="katalogOeffnen" data-ziel="standard" style="margin-top:10px">${ic('plus')} Position hinzufügen</button>
+            <span class="neben"><input id="k-std-${i}" data-std="${i}" inputmode="decimal" value="${mengeText(s.menge)}" style="width:80px;min-height:34px;padding:5px 8px"> ${esc(l.einheit)} · ${euro(l.preisCent)}</span><span></span></div>` : ''; }).join('') || '<div class="leer">Keine.</div>'}</div>
+          <button class="knopf leise" data-act="katalogOeffnen" data-ziel="standard" style="margin-top:6px">${ic('plus')} Position</button>
         </section>
-        <section class="karte"><h2>Notiz</h2><textarea id="k-notiz" data-form="notiz" placeholder="z. B. Schlüssel beim Nachbarn, Hund im Garten">${esc(d.notiz || '')}</textarea></section>
+        <section class="karte"><h2>Notiz</h2><textarea id="k-notiz" data-form="notiz" placeholder="z. B. Schlüssel beim Nachbarn">${esc(d.notiz || '')}</textarea></section>
         <div class="leiste-unten"><button class="knopf zweit" data-act="zurueck">Abbrechen</button><button class="knopf" data-act="kundeSpeichern">${ic('haken')} Speichern</button></div>
-        ${neu ? '' : `<section class="karte"><h2>${ic('baustelle')} Baustellen<button class="knopf leise rechts" data-act="baustelleFuerKunde" data-id="${d.id}">${ic('plus')} Neue Baustelle</button></h2>
-          <div class="liste">${ihreBaustellen.length ? ihreBaustellen.map(b => baustelleZeile(b, zahlen.get(b.id))).join('') : '<div class="leer">Noch keine Baustellen.</div>'}</div></section>
-          <section class="karte"><h2>Rechnungen<button class="knopf leise rechts" data-act="neueRechnungFuer" data-id="${d.id}">${ic('plus')} Neue Rechnung</button></h2>
-          <div class="liste">${ihreRechnungen.length ? ihreRechnungen.map(rechnungZeile).join('') : '<div class="leer">Noch keine Rechnungen.</div>'}</div>
-          ${!ihreRechnungen.length && !ihreBaustellen.length ? `<button class="knopf leise" data-act="kundeLoeschenFragen" style="margin-top:8px">${ic('muell')} Kunde löschen</button>` : ''}</section>`}
+        ${neu ? '' : `<section class="karte"><h2>Baustellen<button class="knopf leise rechts" data-act="baustelleFuerKunde" data-id="${d.id}">${ic('plus')} Neu</button></h2>
+          <div class="liste">${ihreBaustellen.length ? ihreBaustellen.map(b => baustelleZeile(b, zahlen.get(b.id))).join('') : '<div class="leer">Keine.</div>'}</div></section>
+          <section class="karte"><h2>Rechnungen<button class="knopf leise rechts" data-act="neueRechnungFuer" data-id="${d.id}">${ic('plus')} Neu</button></h2>
+          <div class="liste">${ihreRechnungen.length ? ihreRechnungen.map(rechnungZeile).join('') : '<div class="leer">Keine.</div>'}</div></section>
+          ${!ihreRechnungen.length && !ihreBaustellen.length ? `<div><button class="knopf leise" data-act="kundeLoeschenFragen">${ic('muell')} Kunde löschen</button></div>` : ''}`}
       </div>`;
   }
 
-  // ── Leistungen (Katalog nach Kategorien) ──
+  // ── Leistungen (Katalog, nach Kategorien geordnet – zum schnellen Finden) ──
   function ansichtLeistungen() {
     const ks = kategorien();
     const ohne = ks.length && leistungen().some(l => !kategorie(l.kategorieId));
     const chips = [['alle', 'Alle', null], ...ks.map(k => [k.id, k.name, k]), ...(ohne ? [['ohne', 'Ohne Kategorie', null]] : [])];
     if (Z.filterL !== 'alle' && !chips.some(([w]) => w === Z.filterL)) Z.filterL = 'alle';
-    return kopf({ titel: 'Leistungen', unter: 'Dein Katalog – wächst mit jeder Rechnung',
-      rechts: `<button class="knopf zweit" data-act="kategorienOeffnen">${ic('kategorie')}<span class="nur-breit">Kategorien</span></button><button class="knopf" data-act="neueLeistung">${ic('plus')} Neu</button>` }) + `
-      <div class="stapel">${vorschauBand()}
+    return kopf({ titel: 'Leistungen', unter: 'Preise netto', zurueckKnopf: Z.verlauf.length > 0,
+      rechts: statusOrt() + rundKnopf('kategorienOeffnen', 'kategorie', 'Kategorien') + rundKnopf('neueLeistung', 'plus', 'Neue Leistung') }) + `
+      <div class="stapel">
         ${ks.length ? `<div class="filter">${chips.map(([w, t, k]) => `<button class="chip ${Z.filterL === w ? 'an' : ''}" data-act="leistungenFilter" data-wert="${w}">${k ? punkt(k) : ''}${esc(t)}</button>`).join('')}</div>`
-          : `<div class="box gold">${ic('kategorie')}<div><strong>Leistungen nach Kategorien ordnen</strong><br>Zum Beispiel Arbeitszeit, Material, Anfahrt – oder nach Gewerk. Auf Wunsch gliedert sich auch die Rechnung danach (mit Zwischensummen).
-            <div class="knopfreihe"><button class="knopf" data-act="kategorienVorschlag">Vorschlag übernehmen</button><button class="knopf zweit" data-act="kategorieNeu">Eigene anlegen</button></div></div></div>`}
-        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-l" type="search" data-suche="L" value="${esc(Z.sucheL)}" placeholder="Leistung suchen"></label>
+          : `<div class="box">${ic('kategorie')}<div>Mit Kategorien findest du Leistungen schneller.<div class="knopfreihe"><button class="knopf zweit" data-act="kategorienVorschlag">Vorschlag übernehmen</button><button class="knopf leise" data-act="kategorieNeu">Eigene anlegen</button></div></div></div>`}
+        <label class="suche"><span class="versteckt">Suchen</span>${ic('suche')}<input id="suche-l" type="search" data-suche="L" value="${esc(Z.sucheL)}" placeholder="Suchen"></label>
         <div id="liste-l" class="stapel">${leistungenListeHtml()}</div>
       </div>`;
   }
@@ -1135,14 +1106,14 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const l = leistungen().filter(x => (!q || [x.bezeichnung, x.suchwoerter, x.beschreibung].join(' ').toLowerCase().includes(q))
       && (filter === 'alle' || (filter === 'ohne' ? !ks.some(k => k.id === x.kategorieId) : x.kategorieId === filter)));
     if (!l.length) return '<div class="leer">Keine Leistungen gefunden.</div>';
-    // Mit Kategorien: danach gruppiert (Reihenfolge wie festgelegt), sonst nach Art der Leistung
+    // Mit Kategorien danach gruppiert (Reihenfolge wie festgelegt), sonst nach Art der Leistung
     const gruppen = ks.length
       ? [...ks.map(k => [`${punkt(k)}${esc(k.name)}`, l.filter(x => x.kategorieId === k.id)]), ['Ohne Kategorie', l.filter(x => !ks.some(k => k.id === x.kategorieId))]]
       : Object.keys(ARTEN).map(a => [ARTEN[a], l.filter(x => (x.art || 'sonstiges') === a)]);
-    const zeile = x => `<button class="zeile" data-act="${auswahl ? 'katalogWahl' : 'leistungOeffnen'}" data-id="${x.id}"><span class="haupt">${x.favorit ? '<span style="color:var(--gold)">★</span> ' : ''}${esc(x.bezeichnung)}</span>
-      <span class="rechts">${euro(x.preisCent)}</span><span class="neben">${esc(x.einheit)} · ${esc(ARTEN[x.art] || 'Sonstiges')} · ${x.steuersatz ?? 19} % USt${x.beschreibung ? ' · ' + esc(x.beschreibung) : ''}</span><span class="rechts leise klein">netto</span></button>`;
+    const zeile = x => `<button class="zeile" data-act="${auswahl ? 'katalogWahl' : 'leistungOeffnen'}" data-id="${x.id}"><span class="haupt">${x.favorit ? '<span class="stern">★</span> ' : ''}${esc(x.bezeichnung)}</span>
+      <span class="rechts">${euro(x.preisCent)}</span><span class="neben">${esc(x.einheit)}${(x.steuersatz ?? 19) !== 19 ? ` · ${x.steuersatz} % USt` : ''}${x.beschreibung ? ' · ' + esc(x.beschreibung) : ''}</span><span></span></button>`;
     return gruppen.filter(([, g]) => g.length).map(([titel, g]) => auswahl ? `<div class="etikett gruppe-titel">${titel}</div>${g.map(zeile).join('')}`
-      : `<section class="karte"><h2>${titel}<span class="leise klein rechts">${g.length}</span></h2><div class="liste">${g.map(zeile).join('')}</div></section>`).join('');
+      : `<section class="karte"><h2>${titel}</h2><div class="liste">${g.map(zeile).join('')}</div></section>`).join('');
   }
   function ansichtLeistung() {
     const d = Z.form.daten, neu = Z.form.neu, ks = kategorien();
@@ -1153,33 +1124,30 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
         <label class="feld ganz"><span>Bezeichnung (so steht es auf der Rechnung)</span><input id="l-bez" data-form="bezeichnung" value="${esc(d.bezeichnung)}" placeholder="z. B. Arbeitszeit Geselle"></label>
         <div class="feld ganz"><span>Kategorie</span><div class="filter wrap">${ks.map(k => `<button type="button" class="chip ${d.kategorieId === k.id ? 'an' : ''}" data-act="leistungKat" data-id="${k.id}">${punkt(k)}${esc(k.name)}</button>`).join('')}
           ${ks.length ? `<button type="button" class="chip ${!ks.some(k => k.id === d.kategorieId) ? 'an' : ''}" data-act="leistungKat" data-id="">Ohne</button>` : ''}
-          <button type="button" class="chip dazu" data-act="kategorieNeu" data-ziel="leistung">Neue Kategorie</button></div></div>
-        <label class="feld ganz"><span>Beschreibung (optional)</span><textarea id="l-besch" data-form="beschreibung">${esc(d.beschreibung || '')}</textarea></label>
+          <button type="button" class="chip dazu" data-act="kategorieNeu" data-ziel="leistung">Neu</button></div></div>
+        <label class="feld"><span>Preis netto €</span><input id="l-preis" data-form="preis" inputmode="decimal" value="${esc(centText(d.preisCent))}"><small id="l-brutto">${brutto ? 'Brutto ' + brutto : ''}</small></label>
         <label class="feld"><span>Einheit</span><select id="l-einheit" data-form="einheit">${opt(EINHEITEN.map(e => [e.k, e.k]), d.einheit)}</select></label>
         <label class="feld"><span>Art (für § 35a)</span><select id="l-art" data-form="art">${opt(Object.entries(ARTEN), d.art)}</select></label>
-        <label class="feld"><span>Preis netto €</span><input id="l-preis" data-form="preis" inputmode="decimal" value="${esc(centText(d.preisCent))}"></label>
         <label class="feld"><span>Umsatzsteuer</span><select id="l-satz" data-form="steuersatz">${opt(STEUERSAETZE.map(s => [s, s + ' %']), d.steuersatz ?? 19)}</select></label>
-        <div class="feld ganz leise klein" id="l-brutto">${brutto ? 'Brutto: ' + brutto : ''}</div>
-        <label class="feld ganz"><span>Suchwörter für Diktat und Texterkennung (optional)</span><input id="l-such" data-form="suchwoerter" value="${esc(d.suchwoerter || '')}" placeholder="z. B. monteur stunde arbeitszeit"></label>
-        <label class="schalter ganz"><input type="checkbox" id="l-fav" data-form-schalter="favorit" ${d.favorit ? 'checked' : ''}><span>Häufig gebraucht (erscheint im Rechnungseditor als Schnellauswahl)</span></label>
+        <label class="feld ganz"><span>Beschreibung (optional)</span><textarea id="l-besch" data-form="beschreibung">${esc(d.beschreibung || '')}</textarea></label>
+        <label class="feld ganz"><span>Suchwörter für Diktat und Erkennung (optional)</span><input id="l-such" data-form="suchwoerter" value="${esc(d.suchwoerter || '')}" placeholder="z. B. monteur stunde"></label>
+        <label class="schalter ganz"><input type="checkbox" id="l-fav" data-form-schalter="favorit" ${d.favorit ? 'checked' : ''}><span>Häufig gebraucht (Schnellauswahl in der Rechnung)</span></label>
       </div></section>
       <div class="leiste-unten"><button class="knopf zweit" data-act="zurueck">Abbrechen</button><button class="knopf" data-act="leistungSpeichern">${ic('haken')} Speichern</button></div>
-      ${neu ? '' : `<button class="knopf leise" data-act="leistungAusblenden">${ic('muell')} Aus dem Katalog nehmen</button>`}</div>`;
+      ${neu ? '' : `<div><button class="knopf leise" data-act="leistungAusblenden">${ic('muell')} Aus dem Katalog nehmen</button></div>`}</div>`;
   }
   function ansichtKategorien() {
     const ks = kategorien(), alle = leistungen();
-    return kopf({ titel: 'Kategorien', unter: 'Ordnen den Katalog – und auf Wunsch die Rechnung', zurueckKnopf: Z.verlauf.length > 0,
-      rechts: `<button class="knopf" data-act="kategorieNeu">${ic('plus')} Neu</button>` }) + `
-      <div class="stapel">${vorschauBand()}
+    return kopf({ titel: 'Kategorien', zurueckKnopf: Z.verlauf.length > 0, rechts: rundKnopf('kategorieNeu', 'plus', 'Neue Kategorie') }) + `
+      <div class="stapel">
         ${ks.length ? `<section class="karte"><div class="liste">${ks.map((k, i) => {
             const n = alle.filter(l => l.kategorieId === k.id).length;
             return `<div class="zeile2"><button data-act="kategorieBearbeiten" data-id="${k.id}"><span class="haupt">${punkt(k)}${esc(k.name)}</span><span class="neben">${mehrzahl(n, 'Leistung', 'Leistungen')}</span></button>
               <span class="knopfreihe eng"><button class="rund klein" data-act="kategorieVerschieben" data-id="${k.id}" data-richtung="-1" ${i === 0 ? 'disabled' : ''} aria-label="Nach oben">${ic('hoch')}</button>
                 <button class="rund klein" data-act="kategorieVerschieben" data-id="${k.id}" data-richtung="1" ${i === ks.length - 1 ? 'disabled' : ''} aria-label="Nach unten">${ic('runter')}</button></span></div>`;
-          }).join('')}</div></section>
-          <p class="leise klein" style="margin:0 4px">Die Reihenfolge gilt im Katalog und auf Rechnungen, die nach Kategorien gegliedert sind. Antippen zum Umbenennen, Umfärben oder Löschen.</p>`
-        : `<div class="box gold">${ic('kategorie')}<div><strong>Noch keine Kategorien.</strong><br>Ein Vorschlag zum Start: ${KATEGORIE_VORSCHLAG.map(([n]) => esc(n)).join(', ')} – Namen und Farben lassen sich danach ändern.
-            <div class="knopfreihe"><button class="knopf" data-act="kategorienVorschlag">Vorschlag übernehmen</button></div></div></div>`}
+          }).join('')}</div></section>`
+        : `<div class="box">${ic('kategorie')}<div>Noch keine Kategorien. Vorschlag: ${KATEGORIE_VORSCHLAG.map(([n]) => esc(n)).join(', ')}.
+            <div class="knopfreihe"><button class="knopf zweit" data-act="kategorienVorschlag">Vorschlag übernehmen</button></div></div></div>`}
       </div>`;
   }
   function kategorieVerschieben(id, richtung) {
@@ -1192,17 +1160,13 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
 
   // ── Mehr (Handy) ──
   function ansichtMehr() {
-    const z = (ansicht, icon, titel, unter) => `<button class="zeile mehr-zeile" data-act="tab" data-ansicht="${ansicht}"><span class="mehr-symbol">${ic(icon)}</span>
-      <span class="mehr-text"><strong>${titel}</strong><small>${esc(unter)}</small></span>${ic('weiter')}</button>`;
-    return kopf({ titel: 'Mehr', rechts: abgleichChip() }) + `
-      <div class="stapel">${vorschauBand()}
-        <section class="karte"><div class="liste">
-          ${z('kunden', 'kunden', 'Kunden', mehrzahl(kunden().length, 'Kunde', 'Kunden'))}
-          ${z('leistungen', 'leistungen', 'Leistungen', `${leistungen().length} im Katalog · ${mehrzahl(kategorien().length, 'Kategorie', 'Kategorien')}`)}
-          ${z('kategorien', 'kategorie', 'Kategorien', 'Reihenfolge, Farben, Gliederung der Rechnung')}
-          ${z('einstellungen', 'einstellungen', 'Einstellungen', 'Firma, Rechnungen, Diktat, Abgleich')}
-        </div></section>
-      </div>`;
+    const offen = notizen().filter(istOffen).length;
+    const z = (ansicht, icon, titel, zahl = 0) => `<button class="zeile mehr-zeile" data-act="gehe" data-ansicht="${ansicht}"><span class="mehr-symbol">${ic(icon)}</span>
+      <span class="mehr-text">${titel}</span>${zahl ? `<span class="zahl-badge">${zahl}</span>` : ''}${ic('weiter')}</button>`;
+    return kopf({ titel: 'Mehr', rechts: statusOrt() }) + `
+      <div class="stapel"><section class="karte"><div class="liste">
+        ${z('notizen', 'notiz', 'Notizen', offen)}${z('kunden', 'kunden', 'Kunden')}${z('leistungen', 'leistungen', 'Leistungen')}${z('einstellungen', 'einstellungen', 'Einstellungen')}
+      </div></section></div>`;
   }
 
   // ── Einstellungen ──
@@ -1213,54 +1177,49 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     const formatOk = nummernformatGueltig(d.nummernFormat || STANDARD_NUMMERNFORMAT);
     const jahr = new Date().getFullYear();
     const design = document.documentElement.dataset.design === 'hell' ? 'hell' : 'dunkel';
-    return kopf({ titel: 'Einstellungen', zurueckKnopf: Z.verlauf.length > 0, rechts: abgleichChip() }) + `
-      <div class="stapel">${vorschauBand()}
-        <section class="karte"><h2>Mein Unternehmen</h2><p class="leise klein" style="margin:0 0 12px">Diese Angaben stehen auf jeder Rechnung (Briefkopf und Fußzeile).</p><div class="felder">
-          ${inp('name', 'Firmenname', 'ganz')}${inp('zusatz', 'Zusatz unter dem Namen (z. B. Meisterbetrieb für Sanitär und Heizung)', 'ganz')}
+    return kopf({ titel: 'Einstellungen', zurueckKnopf: Z.verlauf.length > 0, rechts: statusOrt() }) + `
+      <div class="stapel">
+        <section class="karte"><h2>Mein Unternehmen</h2><div class="felder">
+          ${inp('name', 'Firmenname', 'ganz')}${inp('zusatz', 'Zusatz unter dem Namen', 'ganz')}
           ${inp('inhaber', 'Inhaber / Geschäftsführer', 'ganz')}${inp('strasse', 'Straße und Hausnummer', 'ganz')}${inp('plz', 'PLZ', 'inputmode="numeric"')}${inp('ort', 'Ort')}
           ${inp('telefon', 'Telefon', 'type="tel"')}${inp('mail', 'E-Mail', 'type="email"')}${inp('web', 'Website', 'ganz')}
-          <div class="feld ganz"><span>Logo (PNG oder JPG, erscheint oben rechts)</span><div class="knopfreihe">${d.logo ? `<img src="${esc(d.logo)}" alt="Logo" style="max-height:48px;max-width:160px;background:#fff;padding:4px;border-radius:6px">` : ''}
+          <div class="feld ganz"><span>Logo (PNG oder JPG)</span><div class="knopfreihe">${d.logo ? `<img src="${esc(d.logo)}" alt="Logo" style="max-height:48px;max-width:160px;background:#fff;padding:4px;border-radius:6px">` : ''}
             <label class="knopf zweit foto-knopf">${ic('plus')} ${d.logo ? 'Anderes Logo' : 'Logo wählen'}<input type="file" accept="image/png,image/jpeg" data-act-change="logoGewaehlt"></label>
             ${d.logo ? '<button type="button" class="knopf leise" data-act="logoEntfernen">Entfernen</button>' : ''}</div></div>
         </div></section>
         <section class="karte"><h2>Steuer und Bank</h2><div class="felder">
-          ${inp('steuernummer', 'Steuernummer (vom Finanzamt)', 'placeholder="z. B. 143/123/45678"')}${inp('ustId', 'USt-IdNr.', 'placeholder="DE123456789"')}
+          ${inp('steuernummer', 'Steuernummer', 'placeholder="z. B. 143/123/45678"')}${inp('ustId', 'USt-IdNr.', 'placeholder="DE123456789"')}
           ${d.ustId && !ustIdGueltig(d.ustId) ? '<div class="box ocker ganz">' + ic('warn') + '<span>Die USt-IdNr. hat nicht das Format DE + 9 Ziffern.</span></div>' : ''}
           ${inp('iban', 'IBAN', 'ganz')}${d.iban && !ibanGueltig(d.iban) ? '<div class="box ocker ganz">' + ic('warn') + '<span>Die IBAN ist nicht gültig (Prüfziffer).</span></div>' : ''}
           ${inp('bic', 'BIC')}${inp('bank', 'Bank')}
-          ${inp('fusszeile', 'Weitere Pflichtangaben in der Fußzeile (z. B. Registergericht, HRB, Geschäftsführer)', 'ganz')}
-          <div class="feld ganz"><span>Umsatzsteuer wird versteuert nach</span>${seg('versteuerung', [['soll', 'vereinbarten Entgelten (Soll)'], ['ist', 'vereinnahmten Entgelten (Ist)']])}
-            <small>Steht in deinem Steuerbescheid bzw. weiß dein Steuerberater. Bei Ist-Versteuerung kommt ab 2028 ein Pflichthinweis auf jede Rechnung – die App setzt ihn automatisch.</small></div>
-          <label class="schalter ganz"><input type="checkbox" id="f-800" data-form-schalter="umsatzUeber800k" ${d.umsatzUeber800k ? 'checked' : ''}><span>Gesamtumsatz im Vorjahr über 800.000 €<br><small class="leise">Dann gilt die E-Rechnungspflicht für Firmenkunden schon ab 1.1.2027 (sonst ab 1.1.2028).</small></span></label>
+          ${inp('fusszeile', 'Weitere Pflichtangaben (z. B. Registergericht, HRB)', 'ganz')}
+          <div class="feld ganz"><span>Versteuerung</span>${seg('versteuerung', [['soll', 'Soll (vereinbart)'], ['ist', 'Ist (vereinnahmt)']])}
+            <small>Bei Ist-Versteuerung setzt die App ab 2028 den Pflichthinweis auf jede Rechnung.</small></div>
+          <label class="schalter ganz"><input type="checkbox" id="f-800" data-form-schalter="umsatzUeber800k" ${d.umsatzUeber800k ? 'checked' : ''}><span>Vorjahresumsatz über 800.000 € <small class="leise">(E-Rechnung an Firmen dann schon ab 2027)</small></span></label>
         </div></section>
         <section class="karte"><h2>Rechnungen</h2><div class="felder">
-          <label class="feld"><span>Nummernformat</span><input id="f-format" data-form="nummernFormat" value="${esc(d.nummernFormat || STANDARD_NUMMERNFORMAT)}" class="${formatOk ? '' : 'fehlt'}"><small>{JJJJ} = Jahr, {NNNN} = laufende Nummer. Beispiel: ${formatOk ? esc(rechnungsnummer(d.nummernFormat, jahr, 42)) : 'Format braucht {NNNN}'}</small></label>
+          <label class="feld"><span>Nummernformat</span><input id="f-format" data-form="nummernFormat" value="${esc(d.nummernFormat || STANDARD_NUMMERNFORMAT)}" class="${formatOk ? '' : 'fehlt'}"><small>${formatOk ? 'z. B. ' + esc(rechnungsnummer(d.nummernFormat, jahr, 42)) : 'Format braucht {NNNN}'}</small></label>
           <label class="feld"><span>Zahlungsziel (Tage)</span><input id="f-ziel" data-form="zahlungszielTage" inputmode="numeric" value="${esc(d.zahlungszielTage ?? 14)}"></label>
-          <label class="feld ganz"><span>Einleitung (Standard)</span><textarea id="f-einl" data-form="einleitung">${esc(d.einleitung || '')}</textarea></label>
-          <label class="feld ganz"><span>Schluss (Standard)</span><textarea id="f-schluss" data-form="schluss" style="min-height:48px">${esc(d.schluss || '')}</textarea></label>
-          <label class="schalter ganz"><input type="checkbox" id="f-gliedern" data-form-schalter="gliedern" ${d.gliedern ? 'checked' : ''}><span>Neue Rechnungen nach Leistungs-Kategorien gliedern<br><small class="leise">Überschrift und Zwischensumme je Kategorie. Lässt sich bei jeder Rechnung umschalten.</small></span></label>
+          <label class="feld ganz"><span>Einleitung</span><textarea id="f-einl" data-form="einleitung">${esc(d.einleitung || '')}</textarea></label>
+          <label class="feld ganz"><span>Schluss</span><textarea id="f-schluss" data-form="schluss" style="min-height:48px">${esc(d.schluss || '')}</textarea></label>
         </div></section>
-        <div class="leiste-unten"><button class="knopf" data-act="firmaSpeichern">${ic('haken')} Einstellungen speichern</button></div>
+        <div class="leiste-unten"><button class="knopf" data-act="firmaSpeichern">${ic('haken')} Speichern</button></div>
         <section class="karte" id="diktat-einstellung">${diktatEinstellungHtml()}</section>
-        <section class="karte"><h2>${ic('abgleich')} Abgleich Handy ↔ Laptop</h2>${abgleichInfoHtml()}</section>
+        <section class="karte"><h2>Abgleich</h2>${abgleichInfoHtml()}</section>
         <section class="karte" id="serverstatus">${serverStatusHtml()}</section>
         <section class="karte"><h2>Darstellung</h2><div class="segment"><button class="${design === 'dunkel' ? 'an' : ''}" data-act="design" data-wert="dunkel">Nacht & Gold</button><button class="${design === 'hell' ? 'an' : ''}" data-act="design" data-wert="hell">Hell</button></div></section>
-        ${modus === 'vorschau' ? `<section class="karte"><h2>Vorschau</h2><p class="leise klein" style="margin:0 0 10px">Setzt alle Beispieldaten auf diesem Gerät zurück.</p><button class="knopf gefahr" data-act="vorschauZuruecksetzen">Beispieldaten zurücksetzen</button></section>` : ''}
+        ${modus === 'vorschau' ? `<section class="karte"><h2>Vorschau</h2><button class="knopf gefahr" data-act="vorschauZuruecksetzen">Beispieldaten zurücksetzen</button></section>` : ''}
       </div>`;
   }
   function diktatEinstellungHtml() {
     const wahl = speicher.meta('diktatModus') || 'live';
-    const live = liveHier(), auf = aufnahmeHier(), s = Z.serverStatus?.diktat;
-    const homeIOS = istIOS() && istHomeBildschirmApp();
-    return `<h2>${ic('mikro')} Diktat auf diesem Gerät</h2>
+    const live = liveHier(), s = Z.serverStatus?.diktat;
+    return `<h2>Diktat</h2>
       <div class="segment voll"><button class="${wahl !== 'aufnahme' ? 'an' : ''}" data-act="diktatModus" data-wert="live">Live mitschreiben</button><button class="${wahl === 'aufnahme' ? 'an' : ''}" data-act="diktatModus" data-wert="aufnahme">Aufnahme → Laptop</button></div>
-      <ul class="pruefliste" style="margin-top:12px">
-        <li class="${live ? 'h' : 'w'}">${ic(live ? 'haken' : 'warn')}<span><strong>Live mitschreiben:</strong> Der Text erscheint, während du sprichst. ${live ? 'Auf diesem Gerät verfügbar.' : homeIOS ? 'In der iPhone-App vom Home-Bildschirm nicht möglich – dort wird automatisch aufgenommen.' : 'Dieser Browser kann das nicht – es wird aufgenommen.'} Die Erkennung übernimmt der Browser-Anbieter (Apple bzw. Google).</span></li>
-        <li class="${auf ? 'h' : 'w'}">${ic(auf ? 'haken' : 'warn')}<span><strong>Aufnahme → Laptop:</strong> Die Aufnahme geht nur an deinen Laptop und wird dort offline abgetippt. Klappt auch ohne Netz – der Text kommt beim nächsten Abgleich.</span></li>
-        ${modus === 'vorschau' ? `<li class="h">${ic('auge')}<span>In der Vorschau wird das Diktat mit einem Beispielsatz vorgeführt – ohne Mikrofon.</span></li>`
-          : s ? `<li class="${s.verfuegbar ? 'h' : 'w'}">${ic(s.verfuegbar ? 'haken' : 'warn')}<span>Abtippen am Laptop: ${s.verfuegbar ? `bereit (${esc(s.modell || '')})` : `noch nicht eingerichtet – Anleitung in der README unter „Diktat". Modell in den Ordner ${esc(s.modellOrdner || 'Modelle')} legen.`}</span></li>` : ''}
-      </ul>
-      <p class="leise klein" style="margin:10px 0 0">Beim Live-Diktat werden „Komma", „Punkt" und „neue Zeile" umgesetzt. Mengen wie „zweieinhalb Stunden" erkennt die App als 2,5 Std.</p>`;
+      <p class="leise klein" style="margin:10px 0 0">${wahl === 'aufnahme' ? 'Die Aufnahme geht nur an deinen Laptop und wird dort offline abgetippt – auch ohne Netz.'
+        : `Der Text erscheint beim Sprechen; die Erkennung macht der Browser-Anbieter (Apple bzw. Google).${live ? '' : ' Auf diesem Gerät nicht möglich – hier wird aufgenommen.'}`}
+        ${modus === 'vorschau' ? ' In der Vorschau wird das Diktat ohne Mikrofon vorgeführt.'
+          : s ? (s.verfuegbar ? ` Abtippen am Laptop: bereit (${esc(s.modell || '')}).` : ' Abtippen am Laptop: noch nicht eingerichtet (README → Diktat).') : ''}</p>`;
   }
   function abgleichInfoHtml() {
     const a = Z.abgleich;
@@ -1272,57 +1231,57 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     </div>
     <div class="felder" style="margin-top:12px"><label class="feld"><span>Name dieses Geräts</span><input id="g-name" data-geraetname value="${esc(speicher.geraet.name)}"></label></div>
     <div class="knopfreihe" style="margin-top:12px"><button class="knopf zweit" data-act="abgleichJetzt">${ic('abgleich')} Jetzt abgleichen</button>
-      ${modus === 'vorschau' ? `<button class="knopf zweit" data-act="vorschauVerbindung">${ic('laptop')} Laptop ${vorschau?.verbunden ? 'trennen' : 'verbinden'} (Test)</button>` : ''}</div>
-    <p class="leise klein" style="margin:10px 0 0">${modus === 'vorschau' ? 'Teste den Offline-Fall: Laptop trennen, eine Notiz diktieren oder etwas ändern, dann wieder verbinden – die Änderungen wandern automatisch hinüber.'
-      : 'Alles wird auf dem Laptop gespeichert. Das Handy hat eine eigene Kopie, arbeitet auch ohne Verbindung und gleicht sich ab, sobald der Laptop erreichbar ist.'}</p>`;
+      ${modus === 'vorschau' ? `<button class="knopf zweit" data-act="vorschauVerbindung">${ic('laptop')} Laptop ${vorschau?.verbunden ? 'trennen' : 'verbinden'} (Test)</button>` : ''}</div>`;
   }
   function serverStatusHtml() {
-    if (modus === 'vorschau') return `<h2>${ic('laptop')} Ablage</h2><p class="leise klein" style="margin:0">In der echten App liegt alles in einem Ordner auf dem Laptop: Datenbank, Rechnungs-PDFs, Fotos, Sprachaufnahmen und tägliche Sicherungen.</p>`;
+    if (modus === 'vorschau') return `<h2>Ablage</h2><p class="leise klein" style="margin:0">In der echten App liegt alles in einem Ordner auf dem Laptop: Datenbank, Rechnungs-PDFs, Fotos, Sprachaufnahmen und tägliche Sicherungen.</p>`;
     const s = Z.serverStatus;
-    if (!s) return `<h2>${ic('laptop')} Ablage auf dem Laptop</h2><p class="leise klein" style="margin:0">Laptop nicht erreichbar – Angaben folgen beim nächsten Abgleich.</p>`;
-    return `<h2>${ic('laptop')} Ablage auf dem Laptop</h2><div class="summen klein">
+    if (!s) return `<h2>Ablage auf dem Laptop</h2><p class="leise klein" style="margin:0">Laptop nicht erreichbar.</p>`;
+    return `<h2>Ablage auf dem Laptop</h2><div class="summen klein">
       <div><span>Ordner</span><span style="overflow-wrap:anywhere;text-align:right">${esc(s.ordner)}</span></div>
-      <div><span>Rechnungen · Kunden · Leistungen</span><span>${s.anzahl.rechnungen || 0} · ${s.anzahl.kunden || 0} · ${s.anzahl.leistungen || 0}</span></div>
-      <div><span>Baustellen · Notizen</span><span>${s.anzahl.baustellen || 0} · ${s.anzahl.notizen || 0}</span></div>
+      <div><span>Rechnungen · Kunden · Baustellen · Notizen</span><span>${s.anzahl.rechnungen || 0} · ${s.anzahl.kunden || 0} · ${s.anzahl.baustellen || 0} · ${s.anzahl.notizen || 0}</span></div>
       <div><span>Abtippen von Sprachaufnahmen</span><span>${s.diktat?.verfuegbar ? 'bereit' : 'nicht eingerichtet'}</span></div>
-      <div><span>Änderungsprotokoll</span><span>${s.protokoll.ok ? 'intakt (' + s.protokoll.eintraege + ' Einträge)' : 'BESCHÄDIGT ab Eintrag ' + s.protokoll.nr}</span></div>
+      <div><span>Änderungsprotokoll</span><span>${s.protokoll.ok ? 'intakt (' + s.protokoll.eintraege + ')' : 'BESCHÄDIGT ab Eintrag ' + s.protokoll.nr}</span></div>
       <div><span>Letzte Sicherung</span><span>${esc((s.sicherungen || []).slice(-1)[0] || '–')}</span></div>
       <div><span>Version</span><span>${esc(s.version)}</span></div></div>`;
   }
 
   // ── Dialoge ──
-  function dialogHtml() { return Z.dialog ? `<div class="blende" data-blende><div class="dialog" role="dialog" aria-modal="true">${dialogInhalt()}</div></div>` : ''; }
+  function dialogHtml() { return Z.dialog ? `<div class="blende" data-blende><div class="dialog ${Z.dialog.art === 'neu' ? 'dialog-menue' : ''}" role="dialog" aria-modal="true">${dialogInhalt()}</div></div>` : ''; }
   function dialogInhalt() {
     const d = Z.dialog;
     const zu = `<button class="knopf zweit" data-act="dialogZu">Abbrechen</button>`;
     switch (d.art) {
+      case 'neu': return `<div class="neu-menue">
+          <button data-act="neueNotiz"><span class="neu-symbol">${ic('mikro')}</span>Notiz</button>
+          <button data-act="neueRechnung"><span class="neu-symbol">${ic('rechnung')}</span>Rechnung</button></div>`;
       case 'kundeWaehlen': return `<h2>Kunde wählen</h2>
-        <label class="suche">${ic('suche')}<input id="d-suche" type="search" data-dsuche value="${esc(d.suche || '')}" placeholder="Name oder Ort"></label>
+        <label class="suche">${ic('suche')}<input id="d-suche" type="search" data-dsuche value="${esc(d.suche || '')}" placeholder="Suchen"></label>
         <div class="waehlliste liste" id="d-liste">${kundenWahlHtml()}</div>
-        <div class="knopfreihe"><button class="knopf zweit" data-act="neuerKundeAusEditor">${ic('plus')} Neuer Kunde</button>${zu}</div>`;
+        <div class="knopfreihe"><button class="knopf leise" data-act="neuerKundeAusEditor">${ic('plus')} Neuer Kunde</button>${zu}</div>`;
       case 'katalog': {
         const ks = kategorien();
         return `<h2>Aus dem Katalog</h2>
           ${ks.length ? `<div class="filter">${[['alle', 'Alle', null], ...ks.map(k => [k.id, k.name, k])].map(([w, t, k]) => `<button class="chip ${(d.kat || 'alle') === w ? 'an' : ''}" data-act="katalogKat" data-wert="${w}">${k ? punkt(k) : ''}${esc(t)}</button>`).join('')}</div>` : ''}
-          <label class="suche">${ic('suche')}<input id="d-suche" type="search" data-dsuche value="${esc(d.suche || '')}" placeholder="Leistung suchen"></label>
+          <label class="suche">${ic('suche')}<input id="d-suche" type="search" data-dsuche value="${esc(d.suche || '')}" placeholder="Suchen"></label>
           <div class="waehlliste" id="d-liste">${leistungenListeHtml(true)}</div><div class="knopfreihe">${zu}</div>`;
       }
       case 'notizenWahl': {
         const l = passendeOffeneNotizen(Z.entwurf);
-        return `<h2>Offene Notizen übernehmen</h2><p class="leise klein" style="margin:0">Erkannte Leistungen und Mengen kommen als Positionen in die Rechnung – zum Prüfen und Anpassen.</p>
-          <div class="waehlliste">${l.length ? l.map(n => notizKarte(n, { art: 'wahl' })).join('') : '<div class="leer">Keine offenen Notizen.</div>'}</div>
-          <div class="knopfreihe">${zu}${l.length > 1 ? `<button class="knopf" data-act="alleNotizenInEntwurf">${ic('plus')} Alle ${l.length} übernehmen</button>` : ''}</div>`;
+        return `<h2>Offene Notizen</h2>
+          <div class="waehlliste liste">${l.length ? l.map(n => notizZeile(n, 'wahl')).join('') : '<div class="leer">Keine offenen Notizen.</div>'}</div>
+          <div class="knopfreihe">${zu}${l.length > 1 ? `<button class="knopf" data-act="alleNotizenInEntwurf">Alle übernehmen</button>` : ''}</div>`;
       }
       case 'festschreiben': {
         const r = Z.entwurf, k = kunde(r.kundeId), s = entwurfSummen(r);
         return `<h2>Rechnung festschreiben?</h2>
-          <div class="summen"><div><span>Kunde</span><span>${esc(k?.name || '')}</span></div><div><span>Positionen</span><span>${r.positionen.filter(p => p.aktiv !== false).length}</span></div><div class="gesamt"><span>Rechnungsbetrag</span><span>${euro(s.bruttoCent)}</span></div></div>
-          <div class="box gold">${ic('schloss')}<span>Der Laptop prüft die Rechnung, vergibt die nächste Rechnungsnummer und legt das PDF unveränderbar ab. Danach sind nur noch Zahlungen und ein Storno möglich.${(r.notizen || []).length ? ` Die ${mehrzahl(r.notizen.length, 'Notiz', 'Notizen')} gelten dann als abgerechnet.` : ''}</span></div>
+          <div class="summen"><div><span>Kunde</span><span>${esc(k?.name || '')}</span></div><div class="gesamt"><span>Rechnungsbetrag</span><span>${euro(s.bruttoCent)}</span></div></div>
+          <p class="leise" style="margin:0">Der Laptop vergibt die Nummer und legt das PDF unveränderbar ab. Danach sind nur noch Zahlungen und ein Storno möglich.</p>
           <div class="knopfreihe">${zu}<button class="knopf" data-act="festschreiben">${ic('schloss')} Festschreiben</button></div>`;
       }
       case 'storno': return `<h2>Rechnung stornieren?</h2>
-        <div class="box rot">${ic('storno')}<span>Es entsteht eine Stornorechnung mit eigener Nummer und negativen Beträgen, die diese Rechnung vollständig aufhebt. Die Original-Rechnung bleibt unverändert im Archiv (GoBD).</span></div>
-        <div class="knopfreihe">${zu}<button class="knopf gefahr" data-act="stornieren">${ic('storno')} Stornorechnung erstellen</button></div>`;
+        <p class="leise" style="margin:0">Es entsteht eine Stornorechnung mit eigener Nummer, die diese Rechnung vollständig aufhebt. Das Original bleibt unverändert im Archiv.</p>
+        <div class="knopfreihe">${zu}<button class="knopf gefahr" data-act="stornieren">${ic('storno')} Stornieren</button></div>`;
       case 'zahlung': {
         const r = speicher.holen('rechnungen', Z.id);
         return `<h2>Zahlung erfassen</h2><div class="felder">
@@ -1331,32 +1290,25 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
           <label class="feld ganz"><span>Notiz (optional)</span><input id="z-notiz" placeholder="z. B. Überweisung, bar, Skonto"></label></div>
           <div class="knopfreihe">${zu}<button class="knopf" data-act="zahlungSpeichern">${ic('haken')} Speichern</button></div>`;
       }
-      case 'loeschen': return `<h2>${esc(d.titel)}</h2><p class="leise">${esc(d.text)}</p><div class="knopfreihe">${zu}<button class="knopf gefahr" data-act="${d.aktion}">${ic('muell')} Löschen</button></div>`;
+      case 'loeschen': return `<h2>${esc(d.titel)}</h2><p class="leise" style="margin:0">${esc(d.text)}</p><div class="knopfreihe">${zu}<button class="knopf gefahr" data-act="${d.aktion}">${ic('muell')} Löschen</button></div>`;
       case 'abgleich': return `<h2>Abgleich mit dem Laptop</h2>${abgleichInfoHtml()}<div class="knopfreihe"><button class="knopf zweit" data-act="dialogZu">Schließen</button></div>`;
-      case 'info': return `<h2>${esc(d.titel)}</h2><p>${d.html}</p><div class="knopfreihe"><button class="knopf" data-act="dialogZu">Verstanden</button></div>`;
-      case 'anmelden': return `<h2>Anmelden</h2><p class="leise">Der Laptop ist mit einer PIN geschützt.</p>
+      case 'info': return `<h2>${esc(d.titel)}</h2><p style="margin:0">${d.html}</p><div class="knopfreihe"><button class="knopf" data-act="dialogZu">Verstanden</button></div>`;
+      case 'anmelden': return `<h2>Anmelden</h2><p class="leise" style="margin:0">Der Laptop ist mit einer PIN geschützt.</p>
         <label class="feld"><span>PIN</span><input id="pin" type="password" inputmode="numeric" autocomplete="current-password"></label>
         <div class="knopfreihe"><button class="knopf" data-act="anmelden">Anmelden</button></div>`;
       case 'baustelleNeu': return `<h2>Neue Baustelle</h2><div class="felder">
-          <label class="feld ganz"><span>Name der Baustelle</span><input id="d-b-name" data-dfeld="name" value="${esc(d.name || '')}" placeholder="z. B. Bad OG Schneider"></label>
+          <label class="feld ganz"><span>Name</span><input id="d-b-name" data-dfeld="name" value="${esc(d.name || '')}" placeholder="z. B. Bad OG Schneider"></label>
           <label class="feld ganz"><span>Kunde</span><select id="d-b-kunde" data-dfeld="kundeId"><option value="">– noch offen –</option>${kunden().map(k => `<option value="${k.id}" ${d.kundeId === k.id ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></label>
-          <label class="feld ganz"><span>Straße (leer lassen = Anschrift des Kunden)</span><input id="d-b-str" data-dfeld="strasse" value="${esc(d.strasse || '')}"></label>
+          <label class="feld ganz"><span>Straße (leer = Anschrift des Kunden)</span><input id="d-b-str" data-dfeld="strasse" value="${esc(d.strasse || '')}"></label>
           <label class="feld"><span>PLZ</span><input id="d-b-plz" data-dfeld="plz" inputmode="numeric" value="${esc(d.plz || '')}"></label>
           <label class="feld"><span>Ort</span><input id="d-b-ort" data-dfeld="ort" value="${esc(d.ort || '')}"></label></div>
-        <div class="knopfreihe">${zu}<button class="knopf" data-act="baustelleSchnellSpeichern">${ic('haken')} Anlegen${d.ziel === 'notiz' ? ' und zuordnen' : ''}</button></div>`;
-      case 'baustelleWaehlen': {
-        const l = baustellenSortiert(true);
-        return `<h2>Baustelle zuordnen</h2>
-          <div class="waehlliste liste">${l.length ? l.map(b => `<button class="zeile" data-act="notizZuordnenWahl" data-id="${b.id}"><span class="haupt">${esc(b.name)}</span><span></span>
-            <span class="neben">${esc([kunde(b.kundeId)?.name, b.ort].filter(Boolean).join(' · ') || 'ohne Kunde')}</span><span></span></button>`).join('') : '<div class="leer">Noch keine laufenden Baustellen.</div>'}</div>
-          <div class="knopfreihe"><button class="knopf zweit" data-act="baustelleSchnell" data-ziel="zuordnen">${ic('plus')} Neue Baustelle</button>${zu}</div>`;
-      }
+        <div class="knopfreihe">${zu}<button class="knopf" data-act="baustelleSchnellSpeichern">${ic('haken')} Anlegen</button></div>`;
       case 'kategorie': {
         const n = d.id ? leistungen().filter(l => l.kategorieId === d.id).length : 0;
-        return `<h2>${d.id ? 'Kategorie bearbeiten' : 'Neue Kategorie'}</h2>
-          <label class="feld"><span>Name</span><input id="d-kat-name" data-dfeld="name" value="${esc(d.name || '')}" placeholder="z. B. Heizung, Sanitär, Material, Anfahrt"></label>
+        return `<h2>${d.id ? 'Kategorie' : 'Neue Kategorie'}</h2>
+          <label class="feld"><span>Name</span><input id="d-kat-name" data-dfeld="name" value="${esc(d.name || '')}" placeholder="z. B. Heizung, Sanitär, Material"></label>
           <div class="feld"><span>Farbe</span><div class="farbwahl">${Object.entries(FARBEN).map(([f, hex]) => `<button type="button" class="${d.farbe === f ? 'an' : ''}" style="--k:${hex}" data-act="kategorieFarbe" data-wert="${f}" aria-label="${FARBNAMEN[f]}" title="${FARBNAMEN[f]}"></button>`).join('')}</div></div>
-          ${d.bestaetigen ? `<div class="box rot">${ic('warn')}<span>${mehrzahl(n, 'Leistung steht', 'Leistungen stehen')} danach unter „Ohne Kategorie". Rechnungen, die schon festgeschrieben sind, bleiben unverändert.</span></div>` : ''}
+          ${d.bestaetigen ? `<div class="box rot">${ic('warn')}<span>${mehrzahl(n, 'Leistung steht', 'Leistungen stehen')} danach unter „Ohne Kategorie".</span></div>` : ''}
           <div class="knopfreihe">${d.id ? `<button class="knopf ${d.bestaetigen ? 'gefahr' : 'leise'}" data-act="kategorieLoeschen" style="margin-right:auto">${ic('muell')} ${d.bestaetigen ? 'Trotzdem löschen' : 'Löschen'}</button>` : ''}${zu}<button class="knopf" data-act="kategorieSpeichern">${ic('haken')} Speichern</button></div>`;
       }
       case 'foto': return `<div class="foto-gross"><img src="${esc(dateiUrl(d.id))}" alt="Foto"></div><div class="knopfreihe"><button class="knopf" data-act="dialogZu">Schließen</button></div>`;
@@ -1385,31 +1337,34 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     if (b && String(r.betreff || '').trim() === bauvorhabenText(b)) r.betreff = '';
     r.baustelleId = null;
   }
-  function notizZuordnenAn(nid, bid) {
-    const n = speicher.holen('notizen', nid), b = baustelle(bid);
-    if (!n || !b) return;
-    speicher.aendern('notizen', { ...stripMeta(n), baustelleId: b.id, kundeId: b.kundeId || n.kundeId || null });
-    zeigeToast(`Zugeordnet: ${b.name}`);
-  }
   const freieFarbe = () => { const belegt = new Set(kategorien().map(k => k.farbe)); return Object.keys(FARBEN).find(f => !belegt.has(f)) || 'grau'; };
   const naechstePosition = () => Math.max(0, ...kategorien().map(k => Number(k.position) || 0)) + 10;
 
   // ── Aktionen ──
   const H = {
     tab: el => tab(el.dataset.ansicht),
+    gehe: el => gehe(el.dataset.ansicht),
     zurueck: () => zurueck(),
+    neuMenue: () => { Z.dialog = { art: 'neu' }; render(); },
+    neueNotiz: () => {
+      const bid = Z.ansicht === 'baustelle' ? Z.id : null;   // aus einer Baustelle heraus: gleich ihr zuordnen
+      Z.dialog = null;
+      gehe('notiz');
+      if (bid && Z.notiz.neu && notizLeer(Z.notiz)) { Z.notiz.baustelleId = bid; Z.notiz.baustelleAuto = false; render(); }
+    },
+    neueRechnung: () => {
+      Z.dialog = null;
+      if (Z.ansicht === 'baustelle' && baustelle(Z.id)) return rechnungFuerBaustelle(baustelle(Z.id));
+      if (Z.ansicht === 'kunde' && Z.form && !Z.form.neu) return neueRechnung(Z.form.daten.id);
+      neueRechnung();
+    },
     rechnungenFilter: el => { Z.filterR = el.dataset.wert; if (Z.ansicht !== 'rechnungen') tab('rechnungen'); else render(); },
     kundenFilter: el => { Z.filterK = el.dataset.wert; render(); },
     baustellenFilter: el => { Z.filterB = el.dataset.wert; render(); },
-    notizenFilter: el => {
-      Z.filterN = el.dataset.wert;
-      wurzel.querySelectorAll('[data-act="notizenFilter"]').forEach(c => c.classList.toggle('an', c.dataset.wert === Z.filterN));
-      teilErsetzen('#liste-n', notizenListeHtml());
-    },
-    notizenOhneBaustelle: () => { Z.filterN = 'ohne'; tab('notiz'); document.getElementById('liste-n')?.scrollIntoView({ block: 'start' }); },
+    notizenFilter: el => { Z.filterN = el.dataset.wert; render(); },
+    notizenOhneBaustelle: () => { Z.filterN = 'ohne'; gehe('notizen'); },
     leistungenFilter: el => { Z.filterL = el.dataset.wert; render(); },
     oeffneRechnung: el => gehe('rechnung', el.dataset.id),
-    neueRechnung: () => neueRechnung(),
     neueRechnungFuer: el => neueRechnung(el.dataset.id),
     neuerKunde: () => gehe('kunde', null),
     kundeOeffnen: el => gehe('kunde', el.dataset.id),
@@ -1457,7 +1412,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       Z.dialog = null; render(); zeigeToast(`„${l.bezeichnung}" hinzugefügt`);
     },
     freiePosition: () => {
-      const p = { id: neueId('p'), leistungId: null, bezeichnung: '', beschreibung: '', menge: 1, einheit: 'Std.', preisCent: null, steuersatz: 19, art: 'arbeit', kategorieId: null, aktiv: true };
+      const p = { id: neueId('p'), leistungId: null, bezeichnung: '', beschreibung: '', menge: 1, einheit: 'Std.', preisCent: null, steuersatz: 19, art: 'arbeit', aktiv: true };
       Z.entwurf.positionen.push(p); render(); document.getElementById(`p-${p.id}-bez`)?.focus();
     },
     posLoeschen: el => { Z.entwurf.positionen = Z.entwurf.positionen.filter(p => p.id !== el.dataset.id); entwurfSofortSpeichern(); render(); },
@@ -1465,7 +1420,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     posInKatalog: el => {
       const p = Z.entwurf.positionen.find(x => x.id === el.dataset.id);
       const l = { id: neueId('l'), bezeichnung: p.bezeichnung.trim(), beschreibung: p.beschreibung || '', einheit: p.einheit, preisCent: p.preisCent, steuersatz: p.steuersatz ?? 19, art: p.art || 'sonstiges',
-        kategorieId: p.kategorieId || null, favorit: false, suchwoerter: '', aktiv: true };
+        kategorieId: null, favorit: false, suchwoerter: '', aktiv: true };
       speicher.aendern('leistungen', l); p.leistungId = l.id; entwurfSofortSpeichern(); render(); zeigeToast('In den Leistungskatalog übernommen');
     },
     notizenWahl: () => { Z.dialog = { art: 'notizenWahl' }; render(); },
@@ -1487,9 +1442,9 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       const text = notizText(n).replace(/\s+/g, ' ').trim();
       const kurz = text.length > 60 ? text.slice(0, 60).replace(/\s+\S*$/, '') : text;
       const p = { id: neueId('p'), leistungId: null, bezeichnung: kurz, beschreibung: text.length > kurz.length ? text : '', menge: 1, einheit: 'pauschal', preisCent: null,
-        steuersatz: 19, art: 'arbeit', kategorieId: null, aktiv: true, ausNotiz: true };
+        steuersatz: 19, art: 'arbeit', aktiv: true, ausNotiz: true };
       Z.entwurf.positionen.push(p); entwurfSofortSpeichern(); render(); document.getElementById(`p-${p.id}-preis`)?.focus();
-      zeigeToast('Als freie Position übernommen – Bezeichnung und Preis bitte prüfen');
+      zeigeToast('Als Position übernommen – Bezeichnung und Preis bitte prüfen');
     },
     festschreibenFragen: () => { entwurfSofortSpeichern(); Z.dialog = { art: 'festschreiben' }; render(); },
     festschreiben: async () => {
@@ -1506,7 +1461,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       else zeigeToast('Freigabe vorgemerkt – die Nummer vergibt der Laptop beim nächsten Abgleich.');
     },
     freigabeZuruecknehmen: () => { Z.entwurf.freigabe = null; speicher.aendern('rechnungen', stripMeta(Z.entwurf)); render(); },
-    entwurfLoeschenFragen: () => { Z.dialog = { art: 'loeschen', titel: 'Entwurf löschen?', text: 'Der Entwurf hat noch keine Nummer und kann gelöscht werden. Zugeordnete Notizen werden wieder offen.', aktion: 'entwurfLoeschen' }; render(); },
+    entwurfLoeschenFragen: () => { Z.dialog = { art: 'loeschen', titel: 'Entwurf löschen?', text: 'Zugeordnete Notizen werden wieder offen.', aktion: 'entwurfLoeschen' }; render(); },
     entwurfLoeschen: () => {
       const r = Z.entwurf;
       for (const id of r.notizen || []) { const n = speicher.holen('notizen', id); if (n && n.status === 'zugeordnet' && n.rechnungId === r.id) speicher.aendern('notizen', { ...stripMeta(n), status: 'offen', rechnungId: null }); }
@@ -1517,10 +1472,10 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     // Festgeschriebene Rechnung
     pdfOeffnen: () => {
       const r = speicher.holen('rechnungen', Z.id);
-      if (modus === 'vorschau' || !transport.pdfUrl) { Z.dialog = { art: 'info', titel: 'PDF in der echten App', html: 'Das PDF erzeugt der Laptop beim Festschreiben und legt es schreibgeschützt im Archiv-Ordner ab. Dort öffnest du es zum Drucken oder Weiterleiten. In dieser Vorschau gibt es keinen echten Laptop – deshalb siehst du die Rechnung hier als Seitenansicht.' }; render(); return; }
+      if (modus === 'vorschau' || !transport.pdfUrl) { Z.dialog = { art: 'info', titel: 'PDF in der echten App', html: 'Das PDF erzeugt der Laptop beim Festschreiben und legt es schreibgeschützt im Archiv-Ordner ab. In dieser Vorschau gibt es keinen echten Laptop – deshalb siehst du die Rechnung hier als Seitenansicht.' }; render(); return; }
       window.open(transport.pdfUrl(r.id), '_blank', 'noopener');
     },
-    mailHinweis: () => { Z.dialog = { art: 'info', titel: 'Versand per E-Mail', html: 'Der Versand direkt aus der App über dein Mail-Postfach kommt in einem der nächsten Schritte – mit Mailvorlage, Kopie an dich und Versandprotokoll. Bis dahin: PDF öffnen und über das Teilen-Menü oder dein Mailprogramm verschicken.' }; render(); },
+    mailHinweis: () => { Z.dialog = { art: 'info', titel: 'Versand per E-Mail', html: 'Der Versand direkt aus der App kommt in einem der nächsten Schritte. Bis dahin: PDF öffnen und über das Teilen-Menü oder dein Mailprogramm verschicken.' }; render(); },
     zahlungDialog: () => { Z.dialog = { art: 'zahlung' }; render(); },
     zahlungSpeichern: () => {
       const r = kopie(speicher.holen('rechnungen', Z.id));
@@ -1541,13 +1496,13 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     wieDiese: () => {
       const r = speicher.holen('rechnungen', Z.id);
       neueRechnung(r.kundeId, { positionen: (r.positionen || []).filter(p => p.aktiv !== false).map(p => ({ ...p, id: neueId('p'), ausNotiz: false })), betreff: r.betreff || '',
-        amGrundstueck: r.amGrundstueck, baustelleId: r.baustelleId || null, gliedern: !!r.gliedern });
+        amGrundstueck: r.amGrundstueck, baustelleId: r.baustelleId || null });
     },
     stornoFragen: () => { Z.dialog = { art: 'storno' }; render(); },
     stornieren: async () => {
       const r = speicher.holen('rechnungen', Z.id);
       const s = { id: neueId('r'), typ: 'storno', status: 'entwurf', stornoVon: r.id, kundeId: r.kundeId, baustelleId: r.baustelleId || null, leistungVon: r.fest.leistungVon, leistungBis: r.fest.leistungBis,
-        amGrundstueck: r.amGrundstueck, gliedern: !!r.gliedern, betreff: `Storno zu Rechnung ${r.nummer}`, einleitung: 'hiermit stornieren wir die oben genannte Rechnung vollständig.', schluss: r.fest.schluss,
+        amGrundstueck: r.amGrundstueck, betreff: `Storno zu Rechnung ${r.nummer}`, einleitung: 'hiermit stornieren wir die oben genannte Rechnung vollständig.', schluss: r.fest.schluss,
         positionen: (r.positionen || []).filter(p => p.aktiv !== false).map(p => ({ ...p, id: neueId('p'), menge: -Number(p.menge) })),
         freigabe: { angefordert: new Date().toISOString(), geraet: speicher.geraet.name }, angelegt: new Date().toISOString() };
       speicher.aendern('rechnungen', s);
@@ -1572,7 +1527,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       if (ziel && Z.entwurf && Z.entwurf.id === ziel) { Z.entwurf.kundeId = gespeichert.id; if (!Z.entwurf.positionen.length) standardDazu(Z.entwurf, gespeichert); entwurfSofortSpeichern(); render(); }
       zeigeToast('Kunde gespeichert');
     },
-    kundeLoeschenFragen: () => { Z.dialog = { art: 'loeschen', titel: 'Kunde löschen?', text: 'Der Kunde hat noch keine Rechnungen und keine Baustellen und kann gelöscht werden.', aktion: 'kundeLoeschen' }; render(); },
+    kundeLoeschenFragen: () => { Z.dialog = { art: 'loeschen', titel: 'Kunde löschen?', text: 'Der Kunde hat keine Rechnungen und keine Baustellen.', aktion: 'kundeLoeschen' }; render(); },
     kundeLoeschen: () => { speicher.loeschen('kunden', Z.form.daten.id); Z.dialog = null; Z.form = null; zurueck(); zeigeToast('Kunde gelöscht'); },
 
     // Leistungen und Kategorien
@@ -1586,7 +1541,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     leistungKat: el => { Z.form.daten.kategorieId = el.dataset.id || null; render(); },
     kategorienVorschlag: () => {
       KATEGORIE_VORSCHLAG.forEach(([name, farbe], i) => speicher.aendern('kategorien', { id: neueId('kat'), name, farbe, position: (i + 1) * 10 }));
-      render(); zeigeToast('Kategorien angelegt – Leistungen jetzt zuordnen (Leistung antippen → Kategorie)');
+      render(); zeigeToast('Kategorien angelegt – Leistung antippen, um sie zuzuordnen');
     },
     kategorieNeu: el => { Z.dialog = { art: 'kategorie', id: null, name: '', farbe: freieFarbe(), ziel: el.dataset.ziel || '' }; render(); wurzel.querySelector('#d-kat-name')?.focus(); },
     kategorieBearbeiten: el => { const k = kategorie(el.dataset.id); Z.dialog = { art: 'kategorie', id: k.id, name: k.name, farbe: k.farbe || 'grau' }; render(); },
@@ -1598,7 +1553,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       const alt = kategorie(d.id);
       const k = speicher.aendern('kategorien', { ...(alt ? stripMeta(alt) : { id: neueId('kat'), position: naechstePosition() }), name, farbe: d.farbe });
       if (d.ziel === 'leistung' && Z.form?.typ === 'leistungen') Z.form.daten.kategorieId = k.id;
-      Z.dialog = null; render(); zeigeToast(alt ? 'Kategorie gespeichert' : `Kategorie „${name}" angelegt`);
+      Z.dialog = null; render();
     },
     kategorieLoeschen: () => {
       const d = Z.dialog;
@@ -1624,38 +1579,37 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     baustelleAdresseVomKunden: () => { const d = Z.form.daten, k = kunde(d.kundeId); if (k) { Object.assign(d, { strasse: k.strasse || '', plz: k.plz || '', ort: k.ort || '' }); render(); } },
     baustelleSpeichern: () => {
       const d = Z.form.daten;
-      if (!String(d.name || '').trim()) { zeigeToast('Bitte einen Namen für die Baustelle eintragen'); document.getElementById('b-name')?.focus(); return; }
+      if (!String(d.name || '').trim()) { zeigeToast('Bitte einen Namen eintragen'); document.getElementById('b-name')?.focus(); return; }
       const neu = Z.form.neu;
       const ende = d.status === 'abgeschlossen' ? (istIso(d.ende) ? d.ende : heute()) : '';
       const b = speicher.aendern('baustellen', { ...stripMeta(d), name: d.name.trim(), kundeId: d.kundeId || null, ende });
       Z.form = null;
       if (neu) { Object.assign(Z, { ansicht: 'baustelle', id: b.id }); vorbereiten(); render(); window.scrollTo(0, 0); }
       else zurueck();
-      zeigeToast(neu ? 'Baustelle angelegt' : 'Baustelle gespeichert');
+      zeigeToast(neu ? 'Baustelle angelegt' : 'Gespeichert');
     },
     baustelleStatus: el => {
       const b = baustelle(el.dataset.id), fertig = b.status !== 'abgeschlossen';
       speicher.aendern('baustellen', { ...stripMeta(b), status: fertig ? 'abgeschlossen' : 'aktiv', ende: fertig ? heute() : '' });
-      render(); zeigeToast(fertig ? 'Abgeschlossen – erscheint nicht mehr in der Notiz-Auswahl' : 'Baustelle wieder geöffnet');
+      render(); zeigeToast(fertig ? 'Baustelle abgeschlossen' : 'Baustelle wieder geöffnet');
     },
-    baustelleLoeschenFragen: el => { Z.dialog = { art: 'loeschen', titel: 'Baustelle löschen?', text: 'Die Baustelle hat keine Notizen und keine Rechnungen und kann gelöscht werden.', aktion: 'baustelleLoeschen', id: el.dataset.id }; render(); },
-    baustelleLoeschen: () => { speicher.loeschen('baustellen', Z.dialog.id); Z.dialog = null; zurueck(); zeigeToast('Baustelle gelöscht'); },
+    baustelleLoeschenFragen: el => { Z.dialog = { art: 'loeschen', titel: 'Baustelle löschen?', text: 'Sie hat keine Notizen und keine Rechnungen.', aktion: 'baustelleLoeschen', id: el.dataset.id }; render(); },
+    baustelleLoeschen: () => {
+      const id = Z.dialog.id;
+      speicher.loeschen('baustellen', id); Z.dialog = null; Z.form = null;
+      zurueck(); if (Z.ansicht === 'baustelle' && Z.id === id) zurueck();
+      zeigeToast('Baustelle gelöscht');
+    },
     baustelleNotiz: el => {
       const id = el.dataset.id;
       gehe('notiz');
       if (Z.notiz.neu) { Z.notiz.baustelleId = id; Z.notiz.baustelleAuto = false; notizMerken(); render(); }
     },
     rechnungAusBaustelle: el => { const b = baustelle(el.dataset.id); if (b) rechnungAusNotizen(notizenVon(b.id).filter(istOffen), { baustelleId: b.id }); },
-    rechnungFuerBaustelle: el => {
-      const b = baustelle(el.dataset.id);
-      const e = rechnungen().find(r => r.status === 'entwurf' && !r.freigabe && r.baustelleId === b.id);
-      if (e) gehe('rechnung', e.id); else neueRechnung(b.kundeId, { baustelleId: b.id, betreff: bauvorhabenText(b) });
-    },
-    baustelleSchnell: el => {
-      const ziel = el.dataset.ziel || 'notiz', notizId = Z.dialog?.notizId || null;
-      const quelle = ziel === 'notiz' ? Z.notiz : speicher.holen('notizen', notizId);
-      const v = quelle ? vorschlaegeAus(notizText(quelle), leistungen(), kunden()) : null;
-      Z.dialog = { art: 'baustelleNeu', ziel, notizId, name: '', kundeId: quelle?.kundeId || v?.kunde?.id || '', strasse: '', plz: '', ort: '' };
+    rechnungFuerBaustelle: el => { const b = baustelle(el.dataset.id); if (b) rechnungFuerBaustelle(b); },
+    baustelleSchnell: () => {
+      const v = Z.notiz ? vorschlaegeAus(notizText(Z.notiz), leistungen(), kunden()) : null;
+      Z.dialog = { art: 'baustelleNeu', name: '', kundeId: Z.notiz?.kundeId || v?.kunde?.id || '', strasse: '', plz: '', ort: '' };
       render(); wurzel.querySelector('#d-b-name')?.focus();
     },
     baustelleSchnellSpeichern: () => {
@@ -1666,38 +1620,26 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       const b = speicher.aendern('baustellen', { id: neueId('b'), name: d.name.trim(), kundeId: k?.id || null, strasse: ohneAdresse ? k?.strasse || '' : String(d.strasse || '').trim(),
         plz: ohneAdresse ? k?.plz || '' : String(d.plz || '').trim(), ort: ohneAdresse ? k?.ort || '' : String(d.ort || '').trim(), status: 'aktiv', beginn: heute(), notiz: '', angelegt: new Date().toISOString() });
       Z.dialog = null;
-      if (d.ziel === 'notiz' && Z.notiz) { Z.notiz.baustelleId = b.id; Z.notiz.baustelleAuto = false; notizMerken(); }
-      if (d.ziel === 'zuordnen' && d.notizId) notizZuordnenAn(d.notizId, b.id);
-      render(); if (d.ziel !== 'zuordnen') zeigeToast(`Baustelle „${b.name}" angelegt`);
+      if (Z.notiz && Z.ansicht === 'notiz') { Z.notiz.baustelleId = b.id; Z.notiz.baustelleAuto = false; notizMerken(); }
+      render();
     },
 
     // Notizen
     notizBaustelle: el => {
       const n = Z.notiz;
       n.baustelleId = el.dataset.id || null; n.baustelleAuto = false;
-      teilErsetzen('#n-baustellen', baustellenWahlHtml()); notizKnoepfeAktualisieren(); notizMerkenBald();
+      teilErsetzen('#n-baustellen', baustellenWahlHtml()); notizMerkenBald();
     },
     notizSpeichern: async () => {
       if (Z.diktat) await diktatStoppen();
       const n = Z.notiz;
       if (!n || notizLeer(n)) return;
-      const alt = n.neu ? null : speicher.holen('notizen', n.id);
+      notizSichern();
       const b = baustelle(n.baustelleId);
-      const v = b ? null : vorschlaegeAus(notizText(n), leistungen(), kunden());
-      speicher.aendern('notizen', {
-        ...(alt ? stripMeta(alt) : {}), id: n.id, text: String(n.text || '').trim(), baustelleId: b?.id || null,
-        kundeId: b ? b.kundeId || null : v?.kunde?.id || alt?.kundeId || null,
-        datum: istIso(n.datum) ? n.datum : heute(), fotos: [...n.fotos], audio: n.audio || null, audioSekunden: n.audio ? Number(n.audioSekunden) || 0 : 0,
-        abschriftUebernommen: !!n.abschriftUebernommen, status: alt?.status || 'offen', rechnungId: alt?.rechnungId || null,
-        angelegt: alt?.angelegt || new Date().toISOString(), geraetName: alt?.geraetName || speicher.geraet.name
-      });
-      if (b) speicher.setMeta('letzteBaustelle', { id: b.id, zeit: Date.now() });
       const offline = modus === 'echt' && !istLaptop && !Z.abgleich.verbunden;
-      zeigeToast(`Notiz gespeichert${b ? ' · ' + b.name : ''}${offline ? ' – geht an den Laptop, sobald er erreichbar ist' : ''}`);
-      if (n.neu) {
-        Z.notiz = neueNotiz(); notizMerken();
-        if (Z.verlauf.length) zurueck(); else { render(); window.scrollTo(0, 0); }
-      } else zurueck();
+      if (n.neu) { Z.notiz = neueNotiz(); notizMerken(); }
+      zurueck();
+      zeigeToast(`Gespeichert${b ? ' · ' + b.name : ''}${offline ? ' – geht an den Laptop, sobald er erreichbar ist' : ''}`);
     },
     notizVerwerfen: async () => {
       if (Z.diktat) await diktatStoppen();
@@ -1705,24 +1647,24 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       for (const id of n.fotos) speicher.dateiVerwerfen(id);
       if (n.audio) speicher.dateiVerwerfen(n.audio);
       Z.notiz = neueNotiz({ baustelleId: n.baustelleId, baustelleAuto: n.baustelleAuto });
-      notizMerken(); render(); zeigeToast('Notiz verworfen');
+      notizMerken(); zurueck();
     },
     notizBearbeiten: el => gehe('notiz', el.dataset.id),
-    notizRechnung: el => {
-      const n = speicher.holen('notizen', el.dataset.id);
-      if (!n) return;
+    notizRechnung: async () => {
+      if (Z.diktat) await diktatStoppen();
+      const n = notizSichern();   // Änderungen zuerst ablegen
       if (baustelle(n.baustelleId)) rechnungAusNotizen([n], { baustelleId: n.baustelleId });
       else rechnungAusNotizen([n], { kundeId: n.kundeId || vorschlaegeAus(notizText(n), leistungen(), kunden()).kunde?.id || null });
     },
-    notizErledigt: el => {
-      const n = speicher.holen('notizen', el.dataset.id);
-      speicher.aendern('notizen', { ...stripMeta(n), status: 'erledigt' }); render(); zeigeToast('Abgehakt – ohne Rechnung');
+    notizErledigt: async () => {
+      if (Z.diktat) await diktatStoppen();
+      notizSichern({ status: 'erledigt' }); zurueck(); zeigeToast('Abgehakt – ohne Rechnung');
     },
-    notizWiederOffen: el => { const n = speicher.holen('notizen', el.dataset.id); speicher.aendern('notizen', { ...stripMeta(n), status: 'offen', rechnungId: null }); render(); },
+    notizWiederOffen: () => { notizSichern({ status: 'offen', rechnungId: null }); zurueck(); },
     notizLoeschenFragen: el => {
       const n = speicher.holen('notizen', el.dataset.id);
       if (n?.status === 'abgerechnet') { zeigeToast('Abgerechnete Notizen bleiben als Nachweis erhalten'); return; }
-      Z.dialog = { art: 'loeschen', titel: 'Notiz löschen?', text: 'Text, Fotos und Sprachaufnahme dieser Notiz werden entfernt.', aktion: 'notizLoeschen', id: el.dataset.id }; render();
+      Z.dialog = { art: 'loeschen', titel: 'Notiz löschen?', text: 'Text, Fotos und Sprachaufnahme werden entfernt.', aktion: 'notizLoeschen', id: el.dataset.id }; render();
     },
     notizLoeschen: () => {
       const id = Z.dialog.id, n = speicher.holen('notizen', id);
@@ -1733,8 +1675,6 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       if (Z.ansicht === 'notiz' && Z.notiz?.id === id) zurueck(); else render();
       zeigeToast('Notiz gelöscht');
     },
-    notizZuordnen: el => { Z.dialog = { art: 'baustelleWaehlen', notizId: el.dataset.id }; render(); },
-    notizZuordnenWahl: el => { notizZuordnenAn(Z.dialog.notizId, el.dataset.id); Z.dialog = null; render(); },
     fotoZeigen: el => { Z.dialog = { art: 'foto', id: el.dataset.id }; render(); },
     fotoEntfernen: el => {
       const n = Z.notiz;
@@ -1753,7 +1693,6 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     // Diktat
     diktatStart: () => diktatStarten(),
     diktatStopp: () => diktatStoppen(),
-    diktatArtWechseln: el => { speicher.setMeta('diktatModus', el.dataset.wert); if (el.dataset.wert === 'live') speicher.setMeta('liveGesperrt', false); diktatNeuZeichnen(); },
     diktatModus: el => { speicher.setMeta('diktatModus', el.dataset.wert); if (el.dataset.wert === 'live') speicher.setMeta('liveGesperrt', false); teilErsetzen('#diktat-einstellung', diktatEinstellungHtml()); },
 
     // Einstellungen
@@ -1769,10 +1708,15 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
   // Klicks
   wurzel.addEventListener('click', ev => {
     if (ev.target.matches('[data-blende]')) { Z.dialog = null; render(); return; }
+    if (ev.target.closest('audio')) return;          // Abspielen in einer Notiz-Karte öffnet nicht die Notiz
+    if (ev.target.id === 'n-datum') { try { ev.target.showPicker(); } catch { /* Gerät öffnet den Kalender selbst */ } return; }
     const el = ev.target.closest('[data-act]');
     if (!el || el.disabled) return;
     const f = H[el.dataset.act];
     if (f) { ev.preventDefault(); f(el, ev); }
+  });
+  wurzel.addEventListener('keydown', ev => {
+    if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('[role="button"][data-act]')) { ev.preventDefault(); ev.target.click(); }
   });
   // Eingaben
   wurzel.addEventListener('input', ev => eingabe(ev.target, 'input'));
@@ -1795,6 +1739,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     if (el.dataset.dfeld && Z.dialog) { Z.dialog[el.dataset.dfeld] = el.type === 'checkbox' ? el.checked : el.value; return; }
     if (el.dataset.n && Z.notiz) {
       Z.notiz[el.dataset.n] = el.value;
+      if (el.dataset.n === 'datum') { const t = wurzel.querySelector('#n-datum-text'); if (t) t.textContent = datumKurz(el.value) || 'Datum'; }
       if (el.dataset.n === 'text') notizTextGeaendert(); else notizMerkenBald();
       return;
     }
@@ -1812,12 +1757,6 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       else if (f === 'menge') { p.menge = mengeAus(el.value); el.classList.toggle('fehlt', !Number(p.menge)); }
       else if (f === 'preis') { p.preisCent = centAus(el.value); el.classList.toggle('fehlt', p.preisCent == null); }
       else if (f === 'steuersatz') p.steuersatz = Number(el.value);
-      else if (f === 'kategorieId') {
-        p.kategorieId = el.value || null;
-        const k = kategorie(p.kategorieId);
-        posEl.classList.toggle('mit-kat', !!k);
-        if (k) posEl.style.setProperty('--k', farbeVon(k)); else posEl.style.removeProperty('--k');
-      }
       else { p[f] = el.value; if (f === 'bezeichnung') el.classList.toggle('fehlt', el.value.trim().length < 2); }
       const zelle = posEl.querySelector('[data-betrag]'); if (zelle) zelle.textContent = euro(positionNetto(p));
       entwurfSpeichernBald(); teilAktualisieren(); return;
@@ -1835,7 +1774,7 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
       else if (f === 'steuersatz') d.steuersatz = Number(el.value);
       else if (f === 'zahlungszielTage') d.zahlungszielTage = el.value.trim() === '' ? (Z.form.typ === 'einstellungen' ? 14 : null) : Math.max(0, parseInt(el.value, 10) || 0);
       else d[f] = el.value;
-      if (Z.form.typ === 'leistungen' && (f === 'preis' || f === 'steuersatz')) teilErsetzen('#l-brutto', d.preisCent == null ? '' : 'Brutto: ' + euro(Math.round(d.preisCent * (1 + Number(d.steuersatz ?? 19) / 100))));
+      if (Z.form.typ === 'leistungen' && (f === 'preis' || f === 'steuersatz')) teilErsetzen('#l-brutto', d.preisCent == null ? '' : 'Brutto ' + euro(Math.round(d.preisCent * (1 + Number(d.steuersatz ?? 19) / 100))));
       if (Z.form.typ === 'einstellungen' && ['ustId', 'iban', 'nummernFormat'].includes(f) && art === 'change') render();
       if (Z.form.typ === 'baustellen' && f === 'kundeId') render();
       return;
@@ -1878,13 +1817,12 @@ export function starteApp({ speicher, transport, modus = 'echt', wurzel = docume
     if (Z.dialog && Z.dialog.art !== 'abgleich') return;
     if (audioSpielt()) { spaeterZeichnen = true; return; }
     if (Z.ansicht === 'notiz') {
-      // Eingabe bleibt unberührt – nur Liste, Auswahl und ggf. die frisch abgetippte Aufnahme der bearbeiteten Notiz
+      // Eingabe bleibt unberührt – nur die Baustellen-Auswahl und ggf. die frisch abgetippte Aufnahme der bearbeiteten Notiz
       const n = Z.notiz, gespeichert = !n.neu ? speicher.holen('notizen', n.id) : null;
       if (gespeichert && (gespeichert.abschriftStatus !== n.abschriftStatus || gespeichert.abschrift !== n.abschrift)) {
         Object.assign(n, { abschrift: gespeichert.abschrift, abschriftStatus: gespeichert.abschriftStatus, abschriftZeit: gespeichert.abschriftZeit, _seq: gespeichert._seq });
         if (!tippt && !Z.diktat) { render(); return; }
       }
-      teilErsetzen('#liste-n', notizenListeHtml());
       if (n.neu) teilErsetzen('#n-baustellen', baustellenWahlHtml());
       return;
     }

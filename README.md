@@ -2,8 +2,8 @@
 
 Rechnungen für den Handwerksbetrieb – Schwester-App von **MyDesk** (gleiche Bedienung, gleiches Design „Nacht & Gold",
 eigene Daten). Auf der Baustelle Notizen diktieren und fotografieren – direkt der Baustelle zugeordnet –, am Laptop oder
-Handy daraus rechtssichere Rechnungen erstellen, zum Drucken und Verschicken. Leistungen sind nach Kategorien geordnet,
-auf Wunsch auch die Rechnung (mit Zwischensummen).
+Handy daraus rechtssichere Rechnungen erstellen, zum Drucken und Verschicken. Im Leistungskatalog sind die Leistungen
+nach Kategorien geordnet, damit man sie schnell findet – die Rechnung selbst bleibt eine einfache Liste.
 
 **Stand:** zweite Version (Entwurf) – Kategorien, Baustellen, Notizen mit Diktat. Was fertig ist und was als Nächstes kommt: [FAHRPLAN.md](FAHRPLAN.md), Abschnitt 0.
 Muster-Rechnung: [docs/Muster-Rechnung.pdf](docs/Muster-Rechnung.pdf).
@@ -60,7 +60,10 @@ Ab dann startet die App auch ohne Verbindung und gleicht sich ab, sobald der Lap
 
 ## Notizen, Baustellen und Diktat
 
-- **Notiz** (goldener Knopf in der Mitte): oben die Baustelle wählen – die zuletzt benutzte ist am selben Tag schon
+- **Bedienung am Handy:** unten Übersicht · Baustellen · ⊕ · Rechnungen · Mehr (Notizen, Kunden, Leistungen,
+  Einstellungen). Das goldene ⊕ in der Mitte legt eine **Notiz** oder eine **Rechnung** an. Am Laptop steht alles in
+  der Seitenleiste, „Neu" oben.
+- **Notiz:** oben die Baustelle wählen – die zuletzt benutzte ist am selben Tag schon
   gewählt, eine neue lässt sich direkt anlegen. Dann diktieren oder tippen, Fotos dazu, speichern. Nennt der Text eine
   Baustelle, ihre Straße oder einen Kunden mit genau einer laufenden Baustelle, ordnet die App sie selbst zu.
 - **Baustelle:** Bautagebuch mit allen Notizen, Fotos und Aufnahmen nach Tagen. „Rechnung erstellen" übernimmt alle
@@ -91,7 +94,7 @@ von Fachbegriffen wie „Eckventil".
 ## Vorschau und Tests
 
 ```bash
-npm test          # Rechnen, Rechts-Check, GiroCode, Erkennung, Diktat, Gliederung, Server mit zwei Geräten und Abtippen
+npm test          # Rechnen, Rechts-Check, GiroCode, Erkennung, Diktat, Server mit zwei Geräten und Abtippen
 npm run vorschau  # preview/dist/rechnungapp-vorschau.html – Oberfläche mit Beispieldaten, Laptop im Browser nachgebildet
 npm run muster    # docs/Muster-Rechnung.pdf – z. B. zum Prüfen durch den Steuerberater
 ```
@@ -101,7 +104,7 @@ npm run muster    # docs/Muster-Rechnung.pdf – z. B. zum Prüfen durch den Ste
 ```
 server.js                 Laptop-Server: Abgleich, Festschreiben, PDF, Dateien, Sicherung, Live-Meldungen
 src/datenbank.js          SQLite (in Node eingebaut) mit Änderungsprotokoll und Prüfsummen-Kette
-src/rechnung-pdf.js       Rechnungs-PDF nach DIN 5008 mit GiroCode, auf Wunsch nach Kategorien gegliedert
+src/rechnung-pdf.js       Rechnungs-PDF nach DIN 5008 mit GiroCode
 src/diktat.js             Sprachaufnahmen abtippen mit whisper.cpp (offline)
 public/                   App für Handy und Laptop (ohne Build-Schritt)
   app.js, app.css         Oberfläche
@@ -109,7 +112,7 @@ public/                   App für Handy und Laptop (ohne Build-Schritt)
   lib/                    gemeinsame Logik – läuft im Browser und auf dem Server:
     berechnung.js           Beträge in Cent, Umsatzsteuer je Steuersatz (EN 16931)
     pruefung.js             Rechts-Check: Pflichtangaben § 14 UStG, § 13b, § 35a, Hinweise
-    festschreiben.js        Druckfassung, Gliederung nach Kategorien, Nummernformat, Zahlungsstand
+    festschreiben.js        Druckfassung, Nummernformat, Zahlungsstand
     blatt.js                Seitenansicht der Rechnung (wie das PDF)
     abgleich-kern.js        Abgleich auf dem Laptop (Konflikte, Schutz festgeschriebener Rechnungen)
     abgleich-client.js      Abgleich auf dem Gerät

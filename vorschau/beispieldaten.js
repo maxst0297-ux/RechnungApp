@@ -1,5 +1,5 @@
 // Beispieldaten für die Vorschau: ein Handwerksbetrieb (Sanitär/Heizung) mit Privat-, Firmen- und Behördenkunden,
-// Leistungs-Kategorien, Baustellen mit Notizen (auch eine Sprachaufnahme samt Abschrift) und Rechnungen.
+// Leistungs-Kategorien (zum Finden im Katalog), Baustellen mit Notizen (auch eine Sprachaufnahme samt Abschrift) und Rechnungen.
 // Alles ist erfunden und als Beispiel gekennzeichnet. Rechnungen werden über denselben Weg festgeschrieben wie in der
 // echten App (Rechts-Check, Nummernvergabe) – nur mit zurückliegenden Daten.
 import { aenderungenUebernehmen, freigabenAusfuehren, abschriftSetzen } from '../public/lib/abgleich-kern.js';
@@ -12,7 +12,7 @@ export const FIRMA = {
   web: 'www.muster-haustechnik.example', steuernummer: '143/123/45678', ustId: 'DE123456789',
   iban: 'DE89370400440532013000', bic: 'COBADEFFXXX', bank: 'Musterbank München',
   fusszeile: 'Amtsgericht München HRB 123456 · Geschäftsführer: Max Muster',
-  versteuerung: 'soll', umsatzUeber800k: false, zahlungszielTage: 14, nummernFormat: '{JJJJ}-{NNNN}', gliedern: false,
+  versteuerung: 'soll', umsatzUeber800k: false, zahlungszielTage: 14, nummernFormat: '{JJJJ}-{NNNN}',
   einleitung: 'vielen Dank für Ihren Auftrag. Für die ausgeführten Arbeiten berechnen wir Ihnen:', schluss: 'Mit freundlichen Grüßen'
 };
 
@@ -56,7 +56,7 @@ export const KUNDEN = [
 const pos = (leistungId, menge, extra = {}) => {
   const l = LEISTUNGEN.find(x => x.id === leistungId);
   return { id: 'p-' + leistungId + '-' + menge, leistungId, bezeichnung: l.bezeichnung, beschreibung: l.beschreibung, menge, einheit: l.einheit, preisCent: l.preisCent,
-    steuersatz: l.steuersatz, art: l.art, kategorieId: l.kategorieId, aktiv: true, ...extra };
+    steuersatz: l.steuersatz, art: l.art, aktiv: true, ...extra };
 };
 
 const BELEG = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="900"><rect width="600" height="900" fill="#f7f5f0"/>
@@ -135,10 +135,10 @@ export async function beispieldatenAnlegen(speicher, dateien) {
 
   // Rechnungen – über denselben Weg festgeschrieben wie in der echten App
   const basis = (kundeId, von, bis, positionen, extra = {}) => ({ typ: 'rechnung', kundeId, leistungVon: von, leistungBis: bis, amGrundstueck: true, positionen,
-    einleitung: FIRMA.einleitung, schluss: FIRMA.schluss, betreff: '', notizen: [], gliedern: false, baustelleId: null, ...extra });
+    einleitung: FIRMA.einleitung, schluss: FIRMA.schluss, betreff: '', notizen: [], baustelleId: null, ...extra });
   const fertig = [
     { id: 'r-demo-baukontor', datum: tag(-45), d: basis('k-baukontor', tag(-52), tag(-47), [pos('l-geselle', 16), pos('l-helfer', 16), pos('l-klein', 2)],
-      { amGrundstueck: false, gliedern: true, baustelleId: 'b-ring', notizen: ['n-ring-alt'], betreff: 'Bauvorhaben: Wohnanlage Am Ring, Haus B, Am Ring 5, 80999 München – Vorwandinstallation 2. OG' }) },
+      { amGrundstueck: false, baustelleId: 'b-ring', notizen: ['n-ring-alt'], betreff: 'Bauvorhaben: Wohnanlage Am Ring, Haus B, Am Ring 5, 80999 München – Vorwandinstallation 2. OG' }) },
     { id: 'r-demo-krause', datum: tag(-24), bezahlt: tag(-9), d: basis('k-krause', tag(-27), '', [pos('l-wartung', 1), pos('l-anfahrt', 1), pos('l-klein', 1)], { amGrundstueck: false, betreff: 'Wartung Gastherme Backstube' }) },
     { id: 'r-demo-huber', datum: tag(-6), d: basis('k-huber', tag(-8), '', [pos('l-wartung', 1), pos('l-anfahrt', 1), pos('l-eckventil', 2), pos('l-geselle', 0.5, { beschreibung: 'Austausch der Eckventile unter dem Waschtisch' })],
       { betreff: 'Jährliche Thermenwartung', baustelleId: 'b-huber' }) },
